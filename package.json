@@ -1,0 +1,30 @@
+{
+  "name": "pagelet",
+  "version": "0.0.0",
+  "description": "pagelet",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bigpipe/pagelet"
+  },
+  "keywords": [
+    "pagelet",
+    "bigpipe"
+  ],
+  "author": "Arnout Kazemier",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/bigpipe/pagelet/issues"
+  },
+  "homepage": "https://github.com/bigpipe/pagelet",
+  "dependencies": {
+    "debug": "0.7.x",
+    "fusing": "0.0.x"
+  },
+  "devDependencies": {
+    "pre-commit": "0.0.x"
+  }
+}
