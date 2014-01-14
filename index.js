@@ -13,7 +13,7 @@ var debug = require('debug')('bigpipe:pagelet')
  * @api public
  */
 function Pagelet() {
-  var writable = fuse.predefine(this, fuse.predefine.WRITABLE);
+  var writable = Pagelet.predefine(this, Pagelet.predefine.WRITABLE);
 
   writable('page', null);   // Reference to the page that generated the pagelet.
   writable('pipe', null);   // Reference to the BigPipe instance.
