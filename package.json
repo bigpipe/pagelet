@@ -4,7 +4,7 @@
   "description": "pagelet",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha $(find test -name '*.test.js')"
   },
   "repository": {
     "type": "git",
@@ -25,6 +25,9 @@
     "fusing": "0.0.x"
   },
   "devDependencies": {
+    "chai": "1.8.x",
+    "bigpipe": "git://github.com/bigpipe/bigpipe.git#frenzy",
+    "mocha": "1.13.x",
     "pre-commit": "0.0.x"
   }
 }
