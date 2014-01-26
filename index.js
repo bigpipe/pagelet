@@ -75,28 +75,6 @@ Pagelet.writable('RPC', []);
 Pagelet.writable('authorize', null);
 
 /**
- * Optional template engine preference. Useful when we detect the wrong template
- * engine based on the view's file name.
- *
- * @type {String}
- * @public
- */
-Pagelet.writable('engine', '');
-
-/**
- * Get the params of the Page.
- *
- * @type {Object}
- * @public
- */
-Pagelet.readable('params', {
-  enumerable: false,
-  get: function params() {
-    return this.page.params;
-  }
-}, true);
-
-/**
  * Remove the DOM element if we are unauthorized. This will make it easier to
  * create conditional layouts without having to manage the pointless DOM
  * elements.
@@ -119,6 +97,15 @@ Pagelet.writable('remove', true);
  * @public
  */
 Pagelet.writable('view', '');
+
+/**
+ * Optional template engine preference. Useful when we detect the wrong template
+ * engine based on the view's file name.
+ *
+ * @type {String}
+ * @public
+ */
+Pagelet.writable('engine', '');
 
 /**
  * The location of the Style Sheet for this pagelet. It should contain all the
@@ -202,6 +189,19 @@ Pagelet.readable('disabled', function disabled(name) {
     return pagelet.name === name;
   });
 });
+
+/**
+ * Get route parameters that we've extracted from the route.
+ *
+ * @type {Object}
+ * @public
+ */
+Pagelet.readable('params', {
+  enumerable: false,
+  get: function params() {
+    return this.page.params;
+  }
+}, true);
 
 /**
  * Reset the instance to it's original state.
