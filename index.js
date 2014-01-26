@@ -39,13 +39,14 @@ Pagelet.writable('name', '');
  * Pagelet.extend({
  *   RPC: [
  *     'methodname',
- *     'methodname'
- *   [,
+ *     'another'
+ *   ],
  *
  *   methodname: function methodname(reply) {
  *
  *   }
- * });
+ * }).on(module);
+ * ```
  *
  * @type {Array}
  * @public
