@@ -26,7 +26,7 @@
   },
   "devDependencies": {
     "chai": "1.8.x",
-    "bigpipe": "git://github.com/bigpipe/bigpipe.git#frenzy",
+    "bigpipe": "git://github.com/bigpipe/bigpipe.git#master",
     "mocha": "1.13.x",
     "pre-commit": "0.0.x"
   }
