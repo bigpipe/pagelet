@@ -19,7 +19,7 @@
   "bugs": {
     "url": "https://github.com/bigpipe/pagelet/issues"
   },
-  "homepage": "https://github.com/bigpipe/pagelet",
+  "homepage": "http://bigpipe.io",
   "dependencies": {
     "debug": "0.7.x",
     "fusing": "0.0.x"
