@@ -143,10 +143,24 @@ Pagelet.extend({
 
 ### Pagelet: view
 
-The view a reference to the template that we render inside the
+The view is a reference to the template that we render inside the
 `data-pagelet="<name>"` placeholders. Please make sure that your template can be
 rendered on both the client and server side. Take a look at our [temper] project
 for template engines that we support.
+
+### Pagelet: error
+
+Just like the `Pagelet.view` this is a reference to a template that we will
+render in your `data-pagelet="<name>"` placeholders but this template is only
+rendered when:
+
+1. We receive an `Error` argument in our callback that we supply to the
+   `Pagelet#render` method.
+2. Your `Pagelet.view` throws an errow when we're rendering the template.
+
+If this property is not set we will default to a template that ships with this
+Pagelet by default. This template includes a small HTML fragment that states the
+error.
 
 ### Pagelet: engine
 

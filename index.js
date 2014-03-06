@@ -358,11 +358,13 @@ Pagelet.optimize = function optimize(pipe) {
   // Ensure that we have a custom error page for when we fail to render this
   // fragment.
   //
-  Pagelet.prototype.error = prototype.error
-    ? path.resolve(dir, prototype.error)
-    : path.resolve(__dirname, 'error.ejs');
-
-  pipe.temper.prefetch(Pagelet.prototype.error, Pagelet.prototype.engine);
+  if (prototype.error) {
+    Pagelet.prototype.error = path.resolve(dir, prototype.error);
+    pipe.temper.prefetch(Pagelet.prototype.error, Pagelet.prototype.engine);
+  } else {
+    Pagelet.prototype.error = path.resolve(__dirname, 'error.ejs');
+    pipe.temper.prefetch(Pagelet.prototype.error, '');
+  }
 
   if (prototype.css) Pagelet.prototype.css = path.resolve(dir, prototype.css);
   if (prototype.js) Pagelet.prototype.js = path.resolve(dir, prototype.js);
