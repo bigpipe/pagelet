@@ -99,6 +99,20 @@ Pagelet.writable('remove', true);
 Pagelet.writable('view', '');
 
 /**
+ * The location of your error template. This template will be rendered when:
+ *
+ * 1. We receive an `error` argument from your `render` method.
+ * 2. Your view throws an error when rendering the template.
+ *
+ * If no view has been set it will default to the Pagelet's default error
+ * template which outputs a small HTML fragrment that states the error.
+ *
+ * @type {String}
+ * @public
+ */
+Pagelet.writable('error', '');
+
+/**
  * Optional template engine preference. Useful when we detect the wrong template
  * engine based on the view's file name.
  *
@@ -339,6 +353,16 @@ Pagelet.optimize = function optimize(pipe) {
     Pagelet.prototype.view = path.resolve(dir, prototype.view);
     pipe.temper.prefetch(Pagelet.prototype.view, Pagelet.prototype.engine);
   }
+
+  //
+  // Ensure that we have a custom error page for when we fail to render this
+  // fragment.
+  //
+  Pagelet.prototype.error = prototype.error
+    ? path.resolve(dir, prototype.error)
+    : path.resolve(__dirname, 'error.ejs');
+
+  pipe.temper.prefetch(Pagelet.prototype.error, Pagelet.prototype.engine);
 
   if (prototype.css) Pagelet.prototype.css = path.resolve(dir, prototype.css);
   if (prototype.js) Pagelet.prototype.js = path.resolve(dir, prototype.js);
