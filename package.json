@@ -1,6 +1,6 @@
 {
   "name": "pagelet",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "pagelet",
   "main": "index.js",
   "scripts": {
@@ -29,6 +29,6 @@
     "bigpipe": "git://github.com/bigpipe/bigpipe.git#master",
     "mocha": "1.13.x",
     "pre-commit": "0.0.x",
-    "jade": "~1.1.5"
+    "jade": "1.1.x"
   }
 }
