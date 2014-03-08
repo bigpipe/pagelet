@@ -335,10 +335,11 @@ Pagelet.on = function on(module) {
  * Optimize the prototypes of the Pagelet to reduce work when we're actually
  * serving the requests.
  *
+ * @param {Temper} temper Custom Temper instance.
  * @param {BigPipe} pipe The BigPipe instance.
  * @api private
  */
-Pagelet.optimize = function optimize(pipe) {
+Pagelet.optimize = function optimize(temper, pipe) {
   var Pagelet = this
     , prototype = Pagelet.prototype
     , dir = prototype.directory;
@@ -351,7 +352,7 @@ Pagelet.optimize = function optimize(pipe) {
 
   if (prototype.view) {
     Pagelet.prototype.view = path.resolve(dir, prototype.view);
-    pipe.temper.prefetch(Pagelet.prototype.view, Pagelet.prototype.engine);
+    temper.prefetch(Pagelet.prototype.view, Pagelet.prototype.engine);
   }
 
   //
@@ -360,10 +361,10 @@ Pagelet.optimize = function optimize(pipe) {
   //
   if (prototype.error) {
     Pagelet.prototype.error = path.resolve(dir, prototype.error);
-    pipe.temper.prefetch(Pagelet.prototype.error, Pagelet.prototype.engine);
+    temper.prefetch(Pagelet.prototype.error, Pagelet.prototype.engine);
   } else {
     Pagelet.prototype.error = path.resolve(__dirname, 'error.ejs');
-    pipe.temper.prefetch(Pagelet.prototype.error, '');
+    temper.prefetch(Pagelet.prototype.error, '');
   }
 
   if (prototype.css) Pagelet.prototype.css = path.resolve(dir, prototype.css);
@@ -399,7 +400,7 @@ Pagelet.optimize = function optimize(pipe) {
   // "fixed" properties which later can be re-used again to restore
   // a generated instance to it's original state.
   //
-  pipe.emit('transform::pagelet', Pagelet);
+  if (pipe) pipe.emit('transform::pagelet', Pagelet);
   Pagelet.properties = Object.keys(Pagelet.prototype);
 
   //
