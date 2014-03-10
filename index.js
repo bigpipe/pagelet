@@ -24,7 +24,6 @@ function Pagelet() {
   // Prepare the instance.
   //
   this._configure();
-  this.configure.apply(this, arguments);
 }
 
 fuse(Pagelet, require('stream'));
@@ -166,14 +165,6 @@ Pagelet.writable('dependencies', []);
  * @public
  */
 Pagelet.writable('directory', '');
-
-/**
- * Default configuration function.
- *
- * @type {Function}
- * @api public
- */
-Pagelet.writable('configure', function configure(options) {});
 
 /**
  * Default asynchronous render function.
@@ -350,7 +341,7 @@ Pagelet.optimize = function optimize(temper, hook) {
   // "fixed" properties which later can be re-used again to restore
   // a generated instance to it's original state.
   //
-  if ('function' === typeof hook) hook.apply(Pagelet);
+  if ('function' === typeof hook) hook(Pagelet);
   Pagelet.properties = Object.keys(Pagelet.prototype);
 
   //
@@ -358,12 +349,7 @@ Pagelet.optimize = function optimize(temper, hook) {
   // instances and reduce garbage collection.
   //
   Pagelet.freelist = new FreeList('pagelet', Pagelet.prototype.freelist || 1000, function allocate() {
-    function F(args) {
-      return Pagelet.apply(this, args);
-    }
-
-    F.prototype = Pagelet.prototype;
-    return new F(arguments);
+    return new Pagelet;
   });
 
   return Pagelet;
