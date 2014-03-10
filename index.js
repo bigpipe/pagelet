@@ -341,7 +341,7 @@ Pagelet.optimize = function optimize(temper, hook) {
   // "fixed" properties which later can be re-used again to restore
   // a generated instance to it's original state.
   //
-  if ('function' === typeof hook) hook(Pagelet);
+  if ('function' === typeof hook) Pagelet = hook(Pagelet);
   Pagelet.properties = Object.keys(Pagelet.prototype);
 
   //
