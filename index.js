@@ -363,10 +363,7 @@ Pagelet.optimize = function optimize(temper, hook) {
     }
 
     F.prototype = Pagelet.prototype;
-
     return new F(arguments);
-
-    return instance;
   });
 
   return Pagelet;
