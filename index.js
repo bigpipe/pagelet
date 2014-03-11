@@ -23,7 +23,7 @@ function Pagelet() {
   //
   // Prepare the instance.
   //
-  this._configure();
+  this.configure();
 }
 
 fuse(Pagelet, require('stream'));
@@ -191,7 +191,7 @@ Pagelet.writable('render', function render(done) {
  *
  * @api private
  */
-Pagelet.readable('_configure', function configure() {
+Pagelet.readable('configure', function configure() {
   //
   // Set a new id.
   //
