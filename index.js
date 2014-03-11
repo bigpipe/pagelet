@@ -15,9 +15,15 @@ var debug = require('debug')('bigpipe:pagelet')
 function Pagelet() {
   var writable = Pagelet.predefine(this, Pagelet.predefine.WRITABLE);
 
-  writable('page', null);   // Reference to the page that generated the pagelet.
-  writable('pipe', null);   // Reference to the BigPipe instance.
-  writable('id', null);     // Custom ID of the pagelet.
+  //
+  // Custom ID of the pagelet.
+  //
+  writable('id', null);
+
+  //
+  // Prepare the instance.
+  //
+  this.configure();
 }
 
 fuse(Pagelet, require('stream'));
@@ -161,9 +167,9 @@ Pagelet.writable('dependencies', []);
 Pagelet.writable('directory', '');
 
 /**
- * Default render function.
+ * Default asynchronous render function.
  *
- * @param {Function} done callback for async rendering
+ * @type {Function}
  * @api public
  */
 Pagelet.writable('render', function render(done) {
@@ -181,52 +187,11 @@ Pagelet.writable('render', function render(done) {
 //
 
 /**
- * Check if the given pagelet has been enabled for the page.
- *
- * @param {String} name The name of the pagelet.
- * @api public
- */
-Pagelet.readable('enabled', function enabled(name) {
-  return this.page.enabled.some(function some(pagelet) {
-    return pagelet.name === name;
-  });
-});
-
-/**
- * Check if the given pagelet has been disabled for the page.
- *
- * @param {String} name The name of the pagelet.
- * @api public
- */
-Pagelet.readable('disabled', function disabled(name) {
-  return this.page.disabled.some(function some(pagelet) {
-    return pagelet.name === name;
-  });
-});
-
-/**
- * Get route parameters that we've extracted from the route.
- *
- * @type {Object}
- * @public
- */
-Pagelet.readable('params', {
-  enumerable: false,
-  get: function params() {
-    return this.page.params;
-  }
-}, true);
-
-/**
  * Reset the instance to it's original state.
  *
- * @param {Page} page The page instance which created this pagelet.
  * @api private
  */
-Pagelet.readable('configure', function configure(page) {
-  this.pipe = page.pipe;
-  this.page = page;
-
+Pagelet.readable('configure', function configure() {
   //
   // Set a new id.
   //
@@ -236,30 +201,6 @@ Pagelet.readable('configure', function configure(page) {
 
   debug('configuring %s/%s', this.name, this.id);
   return this.removeAllListeners();
-});
-
-/**
- * Renderer takes care of all the data merging and `render` invocation.
- *
- * @param {Function} fn Completion callback.
- * @api private
- */
-Pagelet.readable('renderer', function renderer(fn) {
-  var page = this.page
-    , pagelet = this;
-
-  this.render(function receive(err, data) {
-    if (err) debug('rendering %s/%s resulted in a error', pagelet.name, pagelet.id, err);
-
-    //
-    // If the response was closed, finished the async asap.
-    //
-    if (page.res.finished) {
-      return fn(new Error('Response was closed, unable to write Pagelet'));
-    }
-
-    page.write(pagelet, data, fn);
-  });
 });
 
 /**
@@ -336,10 +277,10 @@ Pagelet.on = function on(module) {
  * serving the requests.
  *
  * @param {Temper} temper Custom Temper instance.
- * @param {BigPipe} pipe The BigPipe instance.
+ * @param {Function} hook Hook into optimize, function will be called with Pagelet.
  * @api private
  */
-Pagelet.optimize = function optimize(temper, pipe) {
+Pagelet.optimize = function optimize(temper, hook) {
   var Pagelet = this
     , prototype = Pagelet.prototype
     , dir = prototype.directory;
@@ -400,7 +341,7 @@ Pagelet.optimize = function optimize(temper, pipe) {
   // "fixed" properties which later can be re-used again to restore
   // a generated instance to it's original state.
   //
-  if (pipe) pipe.emit('transform::pagelet', Pagelet);
+  if ('function' === typeof hook) hook(Pagelet);
   Pagelet.properties = Object.keys(Pagelet.prototype);
 
   //
