@@ -119,7 +119,7 @@ Pagelet.writable('view', '');
 /**
  * The location of your error template. This template will be rendered when:
  *
- * 1. We receive an `error` argument from your `render` method.
+ * 1. We receive an `error` argument from your `get` method.
  * 2. Your view throws an error when rendering the template.
  *
  * If no view has been set it will default to the Pagelet's default error
@@ -179,12 +179,13 @@ Pagelet.writable('dependencies', []);
 Pagelet.writable('directory', '');
 
 /**
- * Default asynchronous render function.
+ * Default asynchronous get function. Override to provide specific data to the
+ * render function.
  *
  * @type {Function}
  * @api public
  */
-Pagelet.writable('render', function render(done) {
+Pagelet.writable('get', function get(done) {
   setImmediate(done);
 });
 
@@ -199,20 +200,20 @@ Pagelet.writable('render', function render(done) {
 //
 
 /**
- * Renderer takes care of all the data merging and `render` invocation.
+ * Render takes care of all the data merging and `get` invocation.
  *
  * @param {Temper} temper Custom Temper instance.
  * @param {Function} after Post render function.
  * @param {Function} fn Completion callback.
  * @api private
  */
-Pagelet.readable('renderer', function renderer(temper, after, fn) {
+Pagelet.readable('render', function render(temper, after, fn) {
   var pagelet = this
     , view = temper.fetch(this.view).server
     , content;
 
-  this.render(function receive(err, data) {
-    if (err) debug('rendering %s/%s resulted in a error', pagelet.name, pagelet.id, err);
+  this.get(function receive(err, data) {
+    if (err) debug('render %s/%s resulted in a error', pagelet.name, pagelet.id, err);
 
     //
     // We've made it this far, but now we have to cross our fingers and HOPE that
