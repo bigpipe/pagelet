@@ -3,7 +3,8 @@
 var debug = require('debug')('bigpipe:pagelet')
   , FreeList = require('freelist').FreeList
   , fuse = require('fusing')
-  , path = require('path');
+  , path = require('path')
+  , fs = require('fs');
 
 /**
  * A pagelet is the representation of an item, section, column, widget on the
@@ -79,6 +80,17 @@ Pagelet.writable('RPC', []);
  * @public
  */
 Pagelet.writable('authorize', null);
+
+/**
+ * The actual chunk of the response that is written for each pagelet.
+ *
+ * @type {String}
+ * @private
+ */
+Pagelet.writable('fragment', fs.readFileSync(__dirname +'/pagelet.fragment', 'utf-8')
+  .split('\n')
+  .join('')
+);
 
 /**
  * Remove the DOM element if we are unauthorized. This will make it easier to
@@ -185,6 +197,53 @@ Pagelet.writable('render', function render(done) {
 //
 // !IMPORTANT
 //
+
+/**
+ * Renderer takes care of all the data merging and `render` invocation.
+ *
+ * @param {Temper} temper Custom Temper instance.
+ * @param {Function} after Post render function.
+ * @param {Function} fn Completion callback.
+ * @api private
+ */
+Pagelet.readable('renderer', function renderer(temper, after, fn) {
+  var pagelet = this
+    , view = temper.fetch(this.view).server
+    , content;
+
+  this.render(function receive(err, data) {
+    if (err) debug('rendering %s/%s resulted in a error', pagelet.name, pagelet.id, err);
+
+    //
+    // We've made it this far, but now we have to cross our fingers and HOPE that
+    // our given template can actually handle the data correctly without throwing
+    // an error. As the rendering is done synchronously, we wrap it in a try/catch
+    // statement and hope that an error is thrown when the template fails to
+    // render the content. If there's an error we will process the error template
+    // instead.
+    //
+    try {
+      content = view(data);
+    } catch (e) {
+      //
+      // This is basically fly or die, if the supplied error template throws an
+      // error while rendering we're basically fucked, your server will crash,
+      // an angry mob of customers with pitchforks will kick in the doors of your
+      // office and smear you with peck and feathers for not writing a more stable
+      // application.
+      //
+      if (!pagelet.error) throw e;
+
+      content = this.temper.fetch(pagelet.error).server(this.merge(data, {
+        reason: 'Failed to render '+ pagelet.name +' as the template throws an error',
+        message: e.message,
+        stack: e.stack
+      }));
+    }
+
+    after(pagelet, content, fn);
+  });
+});
 
 /**
  * Reset the instance to it's original state.
