@@ -2,9 +2,16 @@
 
 var debug = require('debug')('bigpipe:pagelet')
   , FreeList = require('freelist').FreeList
+  , Temper = require('temper')
   , fuse = require('fusing')
   , path = require('path')
   , fs = require('fs');
+
+//
+// Create singletonian temper usable for constructed pagelets. This will ensure
+// caching works properly and allows optimize to use temper.
+//
+var temper = new Temper;
 
 /**
  * A pagelet is the representation of an item, section, column, widget on the
@@ -14,12 +21,11 @@ var debug = require('debug')('bigpipe:pagelet')
  * @api public
  */
 function Pagelet() {
-  var writable = Pagelet.predefine(this, Pagelet.predefine.WRITABLE);
+  var writable = Pagelet.predefine(this, Pagelet.predefine.WRITABLE)
+    , readable = Pagelet.predefine(this);
 
-  //
-  // Custom ID of the pagelet.
-  //
-  writable('id', null);
+  readable('temper', temper);                          // Template parser.
+  writable('id', null);                                // Custom ID of the pagelet.
 
   //
   // Prepare the instance.
@@ -202,14 +208,13 @@ Pagelet.writable('get', function get(done) {
 /**
  * Render takes care of all the data merging and `get` invocation.
  *
- * @param {Temper} temper Custom Temper instance.
  * @param {Function} after Post render function.
  * @param {Function} fn Completion callback.
  * @api private
  */
-Pagelet.readable('render', function render(temper, after, fn) {
+Pagelet.readable('render', function render(after, fn) {
   var pagelet = this
-    , view = temper.fetch(this.view).server
+    , view = this.temper.fetch(this.view).server
     , content;
 
   this.get(function receive(err, data) {
@@ -336,11 +341,10 @@ Pagelet.on = function on(module) {
  * Optimize the prototypes of the Pagelet to reduce work when we're actually
  * serving the requests.
  *
- * @param {Temper} temper Custom Temper instance.
  * @param {Function} hook Hook into optimize, function will be called with Pagelet.
  * @api private
  */
-Pagelet.optimize = function optimize(temper, hook) {
+Pagelet.optimize = function optimize(hook) {
   var Pagelet = this
     , prototype = Pagelet.prototype
     , dir = prototype.directory;
