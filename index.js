@@ -206,14 +206,17 @@ Pagelet.writable('get', function get(done) {
  *
  * @param {Object} context Call post render function with this context
  * @param {Function} after Post render function.
- * @param {Function} fn Completion callback.
+ * @param {Function} done Completion callback.
  * @api private
  */
-Pagelet.readable('render', function render(context, after, fn) {
-  var pagelet = this
-    , view = this.temper.fetch(this.view).server
+Pagelet.readable('render', function render(context, after, done) {
+  var view = this.temper.fetch(this.view).server
+    , pagelet = this
     , content;
 
+  //
+  // Invoke the provided get function.
+  //
   this.get(function receive(err, data) {
     if (err) debug('render %s/%s resulted in a error', pagelet.name, pagelet.id, err);
 
@@ -244,7 +247,18 @@ Pagelet.readable('render', function render(context, after, fn) {
       }));
     }
 
-    after.call(context, pagelet, content, fn);
+    //
+    // Add the Pagelet name and content to the fragment placeholder.
+    //
+    content = pagelet.fragment
+      .replace(/\{pagelet::name\}/g, pagelet.name)
+      .replace(/\{pagelet::template\}/g, content.replace('-->', ''));
+
+    //
+    // Post render hook, e.g. from BigPipe's perspective this will be most
+    // likely page.write, but any function may be passed.
+    //
+    after.call(context, pagelet, content, done);
   });
 });
 
