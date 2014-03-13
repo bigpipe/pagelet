@@ -26,11 +26,7 @@ function Pagelet() {
 
   readable('temper', temper);                          // Template parser.
   writable('id', null);                                // Custom ID of the pagelet.
-
-  //
-  // Prepare the instance.
-  //
-  this.configure();
+  this.configure();                                    // Prepare the instance.
 }
 
 fuse(Pagelet, require('stream'));
@@ -208,11 +204,12 @@ Pagelet.writable('get', function get(done) {
 /**
  * Render takes care of all the data merging and `get` invocation.
  *
+ * @param {Object} context Call post render function with this context
  * @param {Function} after Post render function.
  * @param {Function} fn Completion callback.
  * @api private
  */
-Pagelet.readable('render', function render(after, fn) {
+Pagelet.readable('render', function render(context, after, fn) {
   var pagelet = this
     , view = this.temper.fetch(this.view).server
     , content;
@@ -247,7 +244,7 @@ Pagelet.readable('render', function render(after, fn) {
       }));
     }
 
-    after(pagelet, content, fn);
+    after.call(context, pagelet, content, fn);
   });
 });
 
