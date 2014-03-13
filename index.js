@@ -2,8 +2,16 @@
 
 var debug = require('debug')('bigpipe:pagelet')
   , FreeList = require('freelist').FreeList
+  , Temper = require('temper')
   , fuse = require('fusing')
-  , path = require('path');
+  , path = require('path')
+  , fs = require('fs');
+
+//
+// Create singletonian temper usable for constructed pagelets. This will ensure
+// caching works properly and allows optimize to use temper.
+//
+var temper = new Temper;
 
 /**
  * A pagelet is the representation of an item, section, column, widget on the
@@ -13,17 +21,12 @@ var debug = require('debug')('bigpipe:pagelet')
  * @api public
  */
 function Pagelet() {
-  var writable = Pagelet.predefine(this, Pagelet.predefine.WRITABLE);
+  var writable = Pagelet.predefine(this, Pagelet.predefine.WRITABLE)
+    , readable = Pagelet.predefine(this);
 
-  //
-  // Custom ID of the pagelet.
-  //
-  writable('id', null);
-
-  //
-  // Prepare the instance.
-  //
-  this.configure();
+  readable('temper', temper);                          // Template parser.
+  writable('id', null);                                // Custom ID of the pagelet.
+  this.configure();                                    // Prepare the instance.
 }
 
 fuse(Pagelet, require('stream'));
@@ -81,6 +84,17 @@ Pagelet.writable('RPC', []);
 Pagelet.writable('authorize', null);
 
 /**
+ * The actual chunk of the response that is written for each pagelet.
+ *
+ * @type {String}
+ * @private
+ */
+Pagelet.writable('fragment', fs.readFileSync(__dirname +'/pagelet.fragment', 'utf-8')
+  .split('\n')
+  .join('')
+);
+
+/**
  * Remove the DOM element if we are unauthorized. This will make it easier to
  * create conditional layouts without having to manage the pointless DOM
  * elements.
@@ -107,7 +121,7 @@ Pagelet.writable('view', '');
 /**
  * The location of your error template. This template will be rendered when:
  *
- * 1. We receive an `error` argument from your `render` method.
+ * 1. We receive an `error` argument from your `get` method.
  * 2. Your view throws an error when rendering the template.
  *
  * If no view has been set it will default to the Pagelet's default error
@@ -167,12 +181,13 @@ Pagelet.writable('dependencies', []);
 Pagelet.writable('directory', '');
 
 /**
- * Default asynchronous render function.
+ * Default asynchronous get function. Override to provide specific data to the
+ * render function.
  *
  * @type {Function}
  * @api public
  */
-Pagelet.writable('render', function render(done) {
+Pagelet.writable('get', function get(done) {
   setImmediate(done);
 });
 
@@ -185,6 +200,91 @@ Pagelet.writable('render', function render(done) {
 //
 // !IMPORTANT
 //
+
+/**
+ * Render takes care of all the data merging and `get` invocation.
+ *
+ * Options:
+ *   - after: Post render function to call.
+ *   - context: Context on which to call `after`, defaults to pagelet.
+ *
+ * @param {Object} options Add post render functionality.
+ * @param {Function} done Completion callback.
+ * @api private
+ */
+Pagelet.readable('render', function render(options, done) {
+  var pagelet = this;
+
+  if ('undefined' === typeof done) {
+    done = options;
+    options = {};
+  }
+
+  //
+  // Check for the presence of options and provide pagelet as default for context.
+  //
+  options = options || {};
+  options.context = options.context || pagelet;
+
+  //
+  // Invoke the provided get function and make sure options is an object, from
+  // which `after` can be called in proper context.
+  //
+  pagelet.get(function receive(err, data) {
+    var view = pagelet.temper.fetch(pagelet.view).server
+      , content;
+
+    //
+    // We've made it this far, but now we have to cross our fingers and HOPE that
+    // our given template can actually handle the data correctly without throwing
+    // an error. As the rendering is done synchronously, we wrap it in a try/catch
+    // statement and hope that an error is thrown when the template fails to
+    // render the content. If there's an error we will process the error template
+    // instead.
+    //
+    try {
+      if (err) {
+        debug('render %s/%s resulted in a error', pagelet.name, pagelet.id, err);
+        throw err;
+      }
+
+      content = view(data);
+    } catch (e) {
+      //
+      // This is basically fly or die, if the supplied error template throws an
+      // error while rendering we're basically fucked, your server will crash,
+      // an angry mob of customers with pitchforks will kick in the doors of your
+      // office and smear you with peck and feathers for not writing a more stable
+      // application.
+      //
+      if (!pagelet.error) throw e;
+
+      content = pagelet.temper.fetch(pagelet.error).server(pagelet.merge(data, {
+        reason: 'Failed to render '+ pagelet.name +' as the template throws an error',
+        message: e.message,
+        stack: e.stack
+      }));
+    }
+
+    //
+    // Add the Pagelet name and content to the fragment placeholder.
+    //
+    content = pagelet.fragment
+      .replace(/\{pagelet::name\}/g, pagelet.name)
+      .replace(/\{pagelet::template\}/g, content.replace('-->', ''))
+      .replace(/\{pagelet::data\}/g, options.data);
+
+    //
+    // Post render hook, e.g. from BigPipe's perspective this will be most
+    // likely page.write, but any function may be passed.
+    //
+    if (options.after) {
+      return options.after.call(options.context, content, done);
+    }
+
+    done(undefined, content);
+  });
+});
 
 /**
  * Reset the instance to it's original state.
@@ -276,11 +376,10 @@ Pagelet.on = function on(module) {
  * Optimize the prototypes of the Pagelet to reduce work when we're actually
  * serving the requests.
  *
- * @param {Temper} temper Custom Temper instance.
  * @param {Function} hook Hook into optimize, function will be called with Pagelet.
  * @api private
  */
-Pagelet.optimize = function optimize(temper, hook) {
+Pagelet.optimize = function optimize(hook) {
   var Pagelet = this
     , prototype = Pagelet.prototype
     , dir = prototype.directory;

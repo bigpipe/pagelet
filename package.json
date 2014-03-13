@@ -1,6 +1,6 @@
 {
   "name": "pagelet",
-  "version": "0.0.4",
+  "version": "0.1.0",
   "description": "pagelet",
   "main": "index.js",
   "scripts": {
@@ -21,8 +21,9 @@
   },
   "homepage": "http://bigpipe.io",
   "dependencies": {
-    "debug": "0.7.x",
-    "fusing": "0.0.x"
+    "debug": "~0.7.x",
+    "fusing": "~0.0.x",
+    "temper": "~0.1.4"
   },
   "devDependencies": {
     "chai": "1.8.x",

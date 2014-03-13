@@ -28,8 +28,8 @@ Pagelet.extend({
   css: 'sidebar.styl',
   view: 'templ.jade',
 
-  render: function render() {
-    // do stuff
+  get: function get() {
+    // do stuff when GET is called via render
   }
 });
 ```
@@ -94,10 +94,45 @@ will be the arguments that were used to call the method on the client.
  ```js
 Pagelet.extend({
   RPC: [ 'methodname' ],
- 
+
   methodname: function methodname(reply, arg1, arg2) {
- 
+
   }
+}).on(module);
+```
+
+### Pagelet: fragment
+
+A default fragment is provided via `Pagelet.fragment`, however it is
+possible to overwrite this default fragment with a custom fragment. This fragment
+is used by render to generate content with appropriate data to work with [BigPipe].
+Change `Pagelet.fragment` if you'd like to invoke render and generate custom output.
+
+**Default value**: see [pagelet.fragment][frag]
+
+```js
+Pagelet.extend({
+  fragment: '<div>pagelet::template</div>',
+}).on(module);
+```
+
+### Pagelet: get
+
+Get provides the data that is used for rendering the output of the Pagelet.
+
+The `get` method receives one argument:
+
+- done: A completion callback which accepts two arguments. This callback should be
+called when your custom implementation has finished gathering data from all sources.
+Calling `done(error, data)` will allow the `render` method to complete its work.
+The data provided to the callback will be used to render the actual Pagelet.
+
+```js
+Pagelet.extend({
+  get: function get(done) {
+    var data = { provide: 'data-async' };
+    done(error, data);
+  },
 }).on(module);
 ```
 
@@ -117,7 +152,7 @@ The authorize method receives 2 arguments:
   will be rendered as expected. When the argument evaluates as `false` (so also
   null, undefined, 0 etc) we assume that it's disallowed and should not be
   rendered.
- 
+
 ```js
 Pagelet.extend({
   authorize: function authorize(req, done) {
@@ -130,7 +165,7 @@ Pagelet.extend({
 
 This instructs our render engine to remove the pagelet placeholders from the DOM
 structure if we're unauthorized. This makes it easier to create conditional
-layouts without having to worry about DOM elements that are left behind. 
+layouts without having to worry about DOM elements that are left behind.
 
 **Default value**: `true`
 
@@ -226,3 +261,4 @@ only designed to prevent code from different pagelets clashing with each other**
 [temper]: http://github.com/bigpipe/temper
 [smithy]: http://github.com/observing/smithy
 [fortress]: http://github.com/bigpipe/fortress
+[frag]: https://github.com/bigpipe/pagelet/blob/master/pagelet.fragment
