@@ -204,21 +204,35 @@ Pagelet.writable('get', function get(done) {
 /**
  * Render takes care of all the data merging and `get` invocation.
  *
- * @param {Object} context Call post render function with this context
- * @param {Function} after Post render function.
+ * Options:
+ *   - after: Post render function to call.
+ *   - context: Context on which to call `after`, defaults to pagelet.
+ *
+ * @param {Object} options Add post render functionality.
  * @param {Function} done Completion callback.
  * @api private
  */
-Pagelet.readable('render', function render(context, after, done) {
-  var view = this.temper.fetch(this.view).server
-    , pagelet = this
-    , content;
+Pagelet.readable('render', function render(options, done) {
+  var pagelet = this;
+
+  if ('undefined' === typeof done) {
+    done = options;
+    options = {};
+  }
 
   //
-  // Invoke the provided get function.
+  // Check for the presence of options and provide pagelet as default for context.
   //
-  this.get(function receive(err, data) {
-    if (err) debug('render %s/%s resulted in a error', pagelet.name, pagelet.id, err);
+  options = options || {};
+  options.context = options.context || pagelet;
+
+  //
+  // Invoke the provided get function and make sure options is an object, from
+  // which `after` can be called in proper context.
+  //
+  pagelet.get(function receive(err, data) {
+    var view = pagelet.temper.fetch(pagelet.view).server
+      , content;
 
     //
     // We've made it this far, but now we have to cross our fingers and HOPE that
@@ -229,6 +243,11 @@ Pagelet.readable('render', function render(context, after, done) {
     // instead.
     //
     try {
+      if (err) {
+        debug('render %s/%s resulted in a error', pagelet.name, pagelet.id, err);
+        throw err;
+      }
+
       content = view(data);
     } catch (e) {
       //
@@ -240,7 +259,7 @@ Pagelet.readable('render', function render(context, after, done) {
       //
       if (!pagelet.error) throw e;
 
-      content = this.temper.fetch(pagelet.error).server(this.merge(data, {
+      content = pagelet.temper.fetch(pagelet.error).server(pagelet.merge(data, {
         reason: 'Failed to render '+ pagelet.name +' as the template throws an error',
         message: e.message,
         stack: e.stack
@@ -258,7 +277,11 @@ Pagelet.readable('render', function render(context, after, done) {
     // Post render hook, e.g. from BigPipe's perspective this will be most
     // likely page.write, but any function may be passed.
     //
-    after.call(context, pagelet, content, done);
+    if (options.after) {
+      return options.after.call(options.context, pagelet, content, done);
+    }
+
+    done(undefined, content);
   });
 });
 
