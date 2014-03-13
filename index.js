@@ -271,14 +271,15 @@ Pagelet.readable('render', function render(options, done) {
     //
     content = pagelet.fragment
       .replace(/\{pagelet::name\}/g, pagelet.name)
-      .replace(/\{pagelet::template\}/g, content.replace('-->', ''));
+      .replace(/\{pagelet::template\}/g, content.replace('-->', ''))
+      .replace(/\{pagelet::data\}/g, options.data);
 
     //
     // Post render hook, e.g. from BigPipe's perspective this will be most
     // likely page.write, but any function may be passed.
     //
     if (options.after) {
-      return options.after.call(options.context, pagelet, content, done);
+      return options.after.call(options.context, content, done);
     }
 
     done(undefined, content);
