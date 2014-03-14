@@ -12,7 +12,7 @@ var Pagelet = require('pagelet');
 Or using the BigPipe framework:
 
 ```js
-var Pagelet = require('bigpipe').Pagelet.
+var Pagelet = require('bigpipe').Pagelet;
 ```
 
 ### Pagelet.extend
