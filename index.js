@@ -274,7 +274,7 @@ Pagelet.readable('render', function render(options, done) {
     //
     content = pagelet.fragment
       .replace(/\{pagelet::name\}/g, pagelet.name)
-      .replace(/\{pagelet::template\}/g, content.replace('-->', ''))
+      .replace(/\{pagelet::template\}/g, content.replace(/<!--(.|\s)*?-->/, ''))
       .replace(/\{pagelet::data\}/g, options.data);
 
     //
