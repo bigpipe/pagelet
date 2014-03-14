@@ -207,6 +207,7 @@ Pagelet.writable('get', function get(done) {
  * Options:
  *   - after: Post render function to call.
  *   - context: Context on which to call `after`, defaults to pagelet.
+ *   - data: stringified object representation to pass to the client.
  *
  * @param {Object} options Add post render functionality.
  * @param {Function} done Completion callback.
@@ -222,8 +223,10 @@ Pagelet.readable('render', function render(options, done) {
 
   //
   // Check for the presence of options and provide pagelet as default for context.
+  // Data will be passed to the client as a stringified representation of an object.
   //
   options = options || {};
+  options.data = options.data || '{}';
   options.context = options.context || pagelet;
 
   //
