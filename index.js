@@ -451,7 +451,12 @@ Pagelet.optimize = function optimize(hook) {
   // instances and reduce garbage collection.
   //
   Pagelet.freelist = new FreeList('pagelet', Pagelet.prototype.freelist || 1000, function allocate() {
-    return new Pagelet;
+    var pagelet = new Pagelet();
+
+    pagelet.once('free', function free() {
+      Pagelet.freelist.free(pagelet);
+      pagelet = null;
+    });
   });
 
   return Pagelet;
