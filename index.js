@@ -15,7 +15,7 @@ var temper = new Temper;
 
 /**
  * A pagelet is the representation of an item, section, column, widget on the
- * page. It's basically a small sandboxed application within your page.
+ * page. It's basically a small sand boxed application within your page.
  *
  * @constructor
  * @api public
@@ -24,10 +24,11 @@ function Pagelet() {
   var writable = this.writable = Pagelet.predefine(this, Pagelet.predefine.WRITABLE)
     , readable = this.readable = Pagelet.predefine(this);
 
-  readable('temper', temper);                          // Template parser.
-  writable('id', null);                                // Custom ID of the pagelet.
+  readable('temper', temper);                         // Template parser.
+  writable('id', null);                               // Custom ID of the pagelet.
+  writable('substream', null);                        // Substream from Primus
 
-  this.configure();                                    // Prepare the instance.
+  this.configure();                                   // Prepare the instance.
 }
 
 fuse(Pagelet, require('stream'));
@@ -35,6 +36,7 @@ fuse(Pagelet, require('stream'));
 /**
  * Reset the instance to it's original state.
  *
+ * @returns {Pagelet}
  * @api private
  */
 Pagelet.readable('configure', function configure() {
@@ -202,7 +204,7 @@ Pagelet.writable('directory', '');
  * Default asynchronous get function. Override to provide specific data to the
  * render function.
  *
- * @type {Function}
+ * @param {Function} done Completion callback when we've received data to render
  * @api public
  */
 Pagelet.writable('get', function get(done) {
@@ -229,6 +231,7 @@ Pagelet.writable('get', function get(done) {
  *
  * @param {Object} options Add post render functionality.
  * @param {Function} done Completion callback.
+ * @returns {Pagelet}
  * @api private
  */
 Pagelet.readable('render', function render(options, done) {
@@ -306,6 +309,54 @@ Pagelet.readable('render', function render(options, done) {
 
     done(undefined, content);
   });
+
+  return this;
+});
+
+/**
+ * Connect with a Primus substream.
+ *
+ * @param {Spark} spark The Primus connection.
+ * @param {Function} next The completion callback
+ * @returns {Pagelet}
+ * @api private
+ */
+Pagelet.readable('connect', function connect(spark, next) {
+  var pagelet = this;
+
+  /**
+   * Create a new substream.
+   *
+   * @param {Boolean} authorized Allowed to use this pagelet.
+   * @returns {Pagelet}
+   * @api private
+   */
+  function substream(authorized) {
+    if (!authorized) return next(new Error('Unauthorized to access this pagelet'));
+
+    var stream = pagelet.substream = spark.substream(pagelet.name);
+
+    stream.once('end', pagelet.emits('end'));
+    stream.on('data', function streamed(data) {
+      switch (data.type) {
+        case 'rpc':
+          pagelet.trigger(data.method, data.args, data.id, this);
+        break;
+
+        default:
+          pagelet.emit.apply(pagelet, [data.name].concat(data.args));
+        break;
+      }
+    });
+
+    next(undefined, pagelet);
+    return pagelet;
+  }
+
+  if ('function' !== this.authorize) return substream(true);
+  this.authorize(spark.request, substream);
+
+  return this;
 });
 
 /**
@@ -368,6 +419,7 @@ Pagelet.readable('trigger', function trigger(method, args, id, substream) {
  * ```
  *
  * @param {Module} module The reference to the module object.
+ * @returns {Pagelet}
  * @api public
  */
 Pagelet.on = function on(module) {
@@ -382,6 +434,7 @@ Pagelet.on = function on(module) {
  * serving the requests.
  *
  * @param {Function} hook Hook into optimize, function will be called with Pagelet.
+ * @returns {Pagelet}
  * @api private
  */
 Pagelet.optimize = function optimize(hook) {
