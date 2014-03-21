@@ -21,15 +21,33 @@ var temper = new Temper;
  * @api public
  */
 function Pagelet() {
-  var writable = Pagelet.predefine(this, Pagelet.predefine.WRITABLE)
-    , readable = Pagelet.predefine(this);
+  var writable = this.writable = Pagelet.predefine(this, Pagelet.predefine.WRITABLE)
+    , readable = this.readable = Pagelet.predefine(this);
 
   readable('temper', temper);                          // Template parser.
   writable('id', null);                                // Custom ID of the pagelet.
+
   this.configure();                                    // Prepare the instance.
 }
 
 fuse(Pagelet, require('stream'));
+
+/**
+ * Reset the instance to it's original state.
+ *
+ * @api private
+ */
+Pagelet.readable('configure', function configure() {
+  //
+  // Set a new id.
+  //
+  this.id = [1, 1, 1, 1].map(function generator() {
+    return Math.random().toString(36).substring(2).toUpperCase();
+  }).join('-');
+
+  debug('configuring %s/%s', this.name, this.id);
+  return this.removeAllListeners();
+});
 
 /**
  * The name of this pagelet so it can checked to see if's enabled. In addition
@@ -188,7 +206,7 @@ Pagelet.writable('directory', '');
  * @api public
  */
 Pagelet.writable('get', function get(done) {
-  setImmediate(done);
+  (global.setImmediate || global.setTimeout)(done);
 });
 
 //
@@ -234,7 +252,8 @@ Pagelet.readable('render', function render(options, done) {
   // which `after` can be called in proper context.
   //
   pagelet.get(function receive(err, data) {
-    var view = pagelet.temper.fetch(pagelet.view).server
+    var fetch = pagelet.temper.fetch
+      , view = fetch(pagelet.view).server
       , content;
 
     //
@@ -262,7 +281,7 @@ Pagelet.readable('render', function render(options, done) {
       //
       if (!pagelet.error) throw e;
 
-      content = pagelet.temper.fetch(pagelet.error).server(pagelet.merge(data, {
+      content = fetch(pagelet.error).server(pagelet.merge(data, {
         reason: 'Failed to render '+ pagelet.name +' as the template throws an error',
         message: e.message,
         stack: e.stack
@@ -287,23 +306,6 @@ Pagelet.readable('render', function render(options, done) {
 
     done(undefined, content);
   });
-});
-
-/**
- * Reset the instance to it's original state.
- *
- * @api private
- */
-Pagelet.readable('configure', function configure() {
-  //
-  // Set a new id.
-  //
-  this.id = [1, 1, 1, 1].map(function generator() {
-    return Math.random().toString(36).substring(2).toUpperCase();
-  }).join('-');
-
-  debug('configuring %s/%s', this.name, this.id);
-  return this.removeAllListeners();
 });
 
 /**
