@@ -393,6 +393,7 @@ Pagelet.optimize = function optimize(hook) {
   //
   if (Pagelet.properties) return Pagelet;
 
+  debug('Optimizing pagelet %s for FreeList', prototype.name);
   if (prototype.view) {
     Pagelet.prototype.view = path.resolve(dir, prototype.view);
     temper.prefetch(Pagelet.prototype.view, Pagelet.prototype.engine);
