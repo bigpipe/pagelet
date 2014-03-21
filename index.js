@@ -340,7 +340,7 @@ Pagelet.readable('connect', function connect(spark, next) {
     stream.on('data', function streamed(data) {
       switch (data.type) {
         case 'rpc':
-          pagelet.trigger(data.method, data.args, data.id, this);
+          pagelet.trigger(data.method, data.args, data.id);
         break;
 
         default:
@@ -365,17 +365,16 @@ Pagelet.readable('connect', function connect(spark, next) {
  * @param {String} method The name of the method.
  * @param {Array} args The function arguments.
  * @param {String} id The RPC id.
- * @param {SubStream} substream The substream that does RPC.
  * @returns {Boolean} The event was triggered.
  * @api private
  */
-Pagelet.readable('trigger', function trigger(method, args, id, substream) {
+Pagelet.readable('trigger', function trigger(method, args, id) {
   var index = this.RPC.indexOf(method)
     , err;
 
   if (!~index) {
     debug('%s/%s received an unknown method `%s`, ignorning rpc', this.name, this.id, method);
-    return substream.write({
+    return this.substream.write({
       args: [new Error('The given method is not allowed as RPC function.')],
       type: 'rpc',
       id: id
@@ -387,7 +386,7 @@ Pagelet.readable('trigger', function trigger(method, args, id, substream) {
 
   if ('function' !== typeof fn) {
     debug('%s/%s method `%s` is not a function, ignoring rpc', this.name, this.id, method);
-    return substream.write({
+    return this.substream.write({
       args: [new Error('The called method is not an RPC function.')],
       type: 'rpc',
       id: id
@@ -400,7 +399,7 @@ Pagelet.readable('trigger', function trigger(method, args, id, substream) {
   //
   fn.apply(this, [function returns() {
     var args = Array.prototype.slice.call(arguments, 0)
-      , success = substream.write({ type: 'rpc', args: args, id: id });
+      , success = this.substream.write({ type: 'rpc', args: args, id: id });
 
     return success;
   }].concat(args));
