@@ -512,6 +512,8 @@ Pagelet.optimize = function optimize(hook) {
       Pagelet.freelist.free(pagelet);
       pagelet = null;
     });
+
+    return pagelet;
   });
 
   return Pagelet;
