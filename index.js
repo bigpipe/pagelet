@@ -255,8 +255,7 @@ Pagelet.readable('render', function render(options, done) {
   // which `after` can be called in proper context.
   //
   pagelet.get(function receive(err, data) {
-    var fetch = pagelet.temper.fetch
-      , view = fetch(pagelet.view).server
+    var view = pagelet.temper.fetch(pagelet.view).server
       , content;
 
     //
@@ -284,7 +283,7 @@ Pagelet.readable('render', function render(options, done) {
       //
       if (!pagelet.error) throw e;
 
-      content = fetch(pagelet.error).server(pagelet.merge(data, {
+      content = pagelet.temper.fetch(pagelet.error).server(pagelet.merge(data, {
         reason: 'Failed to render '+ pagelet.name +' as the template throws an error',
         message: e.message,
         stack: e.stack
