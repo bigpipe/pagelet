@@ -396,9 +396,9 @@ Pagelet.readable('trigger', function trigger(method, args, id) {
   // We've found a working function, assume that function is RPC compatible
   // where it accepts a `returns` function that receives the arguments.
   //
-  fn.apply(this, [function returns() {
+  fn.apply(pagelet, [function returns() {
     var args = Array.prototype.slice.call(arguments, 0)
-      , success = this.substream.write({ type: 'rpc', args: args, id: id });
+      , success = pagelet.substream.write({ type: 'rpc', args: args, id: id });
 
     return success;
   }].concat(args));
