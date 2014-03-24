@@ -20,18 +20,17 @@ var temper = new Temper;
  * @api public
  */
 function Pagelet() {
-  var writable = this.writable = Pagelet.predefine(this, Pagelet.predefine.WRITABLE)
-    , readable = this.readable = Pagelet.predefine(this);
+  this.fuse();
 
-  readable('temper', temper);                         // Template parser.
-  writable('substream', null);                        // Substream from Primus/
-  writable('id', null);                               // Custom ID of the pagelet.
+  this.readable('temper', temper);                         // Template parser.
+  this.writable('substream', null);                        // Substream from Primus/
+  this.writable('id', null);                               // Custom ID of the pagelet.
 
   //
   // Add an correctly namespaced debug method so it easier to see which pagelet
   // is called by just checking the name of it.
   //
-  readable('debug', require('debug')('bigpipe:pagelet:'+ this.name));
+  this.readable('debug', require('debug')('bigpipe:pagelet:'+ this.name));
 
   this.configure();                                   // Prepare the instance.
 }

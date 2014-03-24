@@ -22,7 +22,7 @@
   "homepage": "http://bigpipe.io",
   "dependencies": {
     "debug": "~0.7.x",
-    "fusing": "~0.0.x",
+    "fusing": "~0.1.x",
     "temper": "~0.1.4"
   },
   "devDependencies": {
