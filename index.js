@@ -24,8 +24,8 @@ function Pagelet() {
     , readable = this.readable = Pagelet.predefine(this);
 
   readable('temper', temper);                         // Template parser.
+  writable('substream', null);                        // Substream from Primus/
   writable('id', null);                               // Custom ID of the pagelet.
-  writable('substream', null);                        // Substream from Primus
 
   //
   // Add an correctly namespaced debug method so it easier to see which pagelet
@@ -42,6 +42,7 @@ fuse(Pagelet, require('stream'));
  * Reset the instance to it's original state.
  *
  * @returns {Pagelet}
+ * @return {Pagelet}
  * @api private
  */
 Pagelet.readable('configure', function configure() {
@@ -107,6 +108,14 @@ Pagelet.writable('RPC', []);
  * @public
  */
 Pagelet.writable('authorize', null);
+
+/**
+ * A pagelet has been initialised.
+ *
+ * @type {Function}
+ * @public
+ */
+Pagelet.writable('initialize', null);
 
 /**
  * The actual chunk of the response that is written for each pagelet.
@@ -201,7 +210,7 @@ Pagelet.writable('dependencies', []);
  * fetching assets from the correct location.
  *
  * @type {String}
- * @public
+ * @private
  */
 Pagelet.writable('directory', '');
 
