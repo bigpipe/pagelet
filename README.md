@@ -38,8 +38,6 @@ var Pagelet = require('bigpipe').Pagelet;
 - [Pagelet: id](#pagelet-id)
 - [Pagelet: substream](#pagelet-substream)
 
----
-
 ### Pagelet.extend
 
 The `.extend` method is used for creating a new Pagelet constructor. It
@@ -59,8 +57,6 @@ Pagelet.extend({
 });
 ```
 
----
-
 ### Pagelet.on
 
 In [BigPipe] we need to know where the Pagelet is required from so we figure out
@@ -78,8 +74,6 @@ Pagelet.extend({
 
 This has the added benefit of no longer needing to do `module.exports = ..` in
 your code as the `Pagelet.on` method automatically does this for you.
-
----
 
 ### Pagelet: name
 
@@ -111,8 +105,6 @@ Page.extend({
 }).on(module);
 ```
 
----
-
 ### Pagelet: RPC
 
 _optional:_ **writable, array**
@@ -136,8 +128,6 @@ Pagelet.extend({
 }).on(module);
 ```
 
----
-
 ### Pagelet: fragment
 
 _optional:_ **writable, string**
@@ -154,8 +144,6 @@ Pagelet.extend({
   fragment: '<div>pagelet::template</div>',
 }).on(module);
 ```
-
----
 
 ### Pagelet: get
 
@@ -178,8 +166,6 @@ Pagelet.extend({
   },
 }).on(module);
 ```
-
----
 
 ### Pagelet: authorize
 
@@ -208,8 +194,6 @@ Pagelet.extend({
 }).on(module);
 ```
 
----
-
 ### Pagelet: initialize
 
 _optional:_ **writable, function**
@@ -228,8 +212,6 @@ Pagelet.extend({
 });
 ```
 
----
-
 ### Pagelet: remove
 
 _optional:_ **writable, boolean**
@@ -247,8 +229,6 @@ Pagelet.extend({
 }).on(module);
 ```
 
----
-
 ### Pagelet: view
 
 _required:_ **writable, string**
@@ -257,8 +237,6 @@ The view is a reference to the template that we render inside the
 `data-pagelet="<name>"` placeholders. Please make sure that your template can be
 rendered on both the client and server side. Take a look at our [temper] project
 for template engines that we support.
-
----
 
 ### Pagelet: error
 
@@ -275,8 +253,6 @@ rendered when:
 If this property is not set we will default to a template that ships with this
 Pagelet by default. This template includes a small HTML fragment that states the
 error.
-
----
 
 ### Pagelet: engine
 
@@ -297,8 +273,6 @@ Pagelet.extend({
 **Please note that the engine needs to be compatible with the [temper] module
 that we use to compile the templates**
 
----
-
 ### Pagelet: css
 
 _optional:_ **writable, string**
@@ -317,8 +291,6 @@ Pagelet.extend({
 **Please note that this doesn't have to be a `.css` file as we will
 transparently pre-process these files for you. See the [smithy] project for the
 compatible pre-processors.**
-
----
 
 ### Pagelet: js
 
@@ -344,8 +316,6 @@ Pagelet.extend({
 **Please note that the sandboxing is not there as a security feature, it was
 only designed to prevent code from different pagelets clashing with each other**
 
----
-
 ### Pagelet: dependencies
 
 _optional:_ **writable, array**
@@ -362,16 +332,12 @@ pagelet.extend({
 }).on(module);
 ```
 
----
-
 ### Pagelet: id
 
 **read only**
 
 The unique id of a given pagelet instance. Please note that this is not a
 persistent id and will differ between every single initialised instance.
-
----
 
 ### Pagelet: substream
 
