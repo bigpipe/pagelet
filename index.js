@@ -23,7 +23,7 @@ function Pagelet() {
   this.fuse();
 
   this.readable('temper', temper);                         // Template parser.
-  this.writable('substream', null);                        // Substream from Primus/
+  this.writable('substream', null);                        // Substream from Primus.
   this.writable('id', null);                               // Custom ID of the pagelet.
 
   //
@@ -41,7 +41,6 @@ fuse(Pagelet, require('stream'));
  * Reset the instance to it's original state.
  *
  * @returns {Pagelet}
- * @return {Pagelet}
  * @api private
  */
 Pagelet.readable('configure', function configure() {
@@ -382,7 +381,7 @@ Pagelet.readable('connect', function connect(spark, next) {
  */
 Pagelet.readable('call', function calls(data) {
   var index = this.RPC.indexOf(data.method)
-    , fn = this[this.RPC[index]]
+    , fn = this[data.method]
     , pagelet = this
     , err;
 
