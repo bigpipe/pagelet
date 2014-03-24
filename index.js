@@ -4,8 +4,7 @@ var debug = require('debug')('bigpipe:pagelet')
   , FreeList = require('freelist').FreeList
   , Temper = require('temper')
   , fuse = require('fusing')
-  , path = require('path')
-  , fs = require('fs');
+  , path = require('path');
 
 //
 // Create singletonian temper usable for constructed pagelets. This will ensure
@@ -28,6 +27,12 @@ function Pagelet() {
   writable('id', null);                               // Custom ID of the pagelet.
   writable('substream', null);                        // Substream from Primus
 
+  //
+  // Add an correctly namespaced debug method so it easier to see which pagelet
+  // is called by just checking the name of it.
+  //
+  readable('debug', require('debug')('bigpipe:pagelet:'+ this.name));
+
   this.configure();                                   // Prepare the instance.
 }
 
@@ -47,7 +52,7 @@ Pagelet.readable('configure', function configure() {
     return Math.random().toString(36).substring(2).toUpperCase();
   }).join('-');
 
-  debug('configuring %s/%s', this.name, this.id);
+  this.debug('configuring %s/%s', this.name, this.id);
   return this.removeAllListeners();
 });
 
@@ -109,7 +114,7 @@ Pagelet.writable('authorize', null);
  * @type {String}
  * @private
  */
-Pagelet.writable('fragment', fs.readFileSync(__dirname +'/pagelet.fragment', 'utf-8')
+Pagelet.writable('fragment', require('fs').readFileSync(__dirname +'/pagelet.fragment', 'utf-8')
   .split('\n')
   .join('')
 );
@@ -268,7 +273,7 @@ Pagelet.readable('render', function render(options, done) {
     //
     try {
       if (err) {
-        debug('render %s/%s resulted in a error', pagelet.name, pagelet.id, err);
+        pagelet.debug('render %s/%s resulted in a error', pagelet.name, pagelet.id, err);
         throw err;
       }
 
@@ -339,12 +344,15 @@ Pagelet.readable('connect', function connect(spark, next) {
     stream.on('data', function streamed(data) {
       switch (data.type) {
         case 'rpc':
-          pagelet.trigger(data.method, data.args, data.id);
+          // pagelet.trigger(data.method, data.args, data.id);
+          pagelet.call(data);
         break;
 
-        default:
+        case 'emit':
           pagelet.emit.apply(pagelet, [data.name].concat(data.args));
         break;
+
+        // @TODO handle get/post/put
       }
     });
 
@@ -359,51 +367,35 @@ Pagelet.readable('connect', function connect(spark, next) {
 });
 
 /**
- * Trigger a RPC function.
+ * Call an rpc method.
  *
- * @param {String} method The name of the method.
- * @param {Array} args The function arguments.
- * @param {String} id The RPC id.
- * @returns {Boolean} The event was triggered.
+ * @param {Object} data The RPC call information.
  * @api private
  */
-Pagelet.readable('trigger', function trigger(method, args, id) {
-  var index = this.RPC.indexOf(method)
+Pagelet.readable('call', function calls(data) {
+  var index = this.RPC.indexOf(data.method)
+    , fn = this[this.RPC[index]]
+    , pagelet = this
     , err;
 
-  if (!~index) {
-    debug('%s/%s received an unknown method `%s`, ignorning rpc', this.name, this.id, method);
-    return this.substream.write({
-      args: [new Error('The given method is not allowed as RPC function.')],
-      type: 'rpc',
-      id: id
-    });
-  }
-
-  var fn = this[this.RPC[index]]
-    , pagelet = this;
-
-  if ('function' !== typeof fn) {
-    debug('%s/%s method `%s` is not a function, ignoring rpc', this.name, this.id, method);
-    return this.substream.write({
-      args: [new Error('The called method is not an RPC function.')],
-      type: 'rpc',
-      id: id
-    });
-  }
+  if (!~index || 'function' !== typeof fn) return this.substream.write({
+    args: [new Error('RPC method is not known')],
+    type: 'rpc',
+    id: data.id
+  });
 
   //
-  // We've found a working function, assume that function is RPC compatible
-  // where it accepts a `returns` function that receives the arguments.
+  // Our RPC pattern is a callback first pattern, where the callback is the
+  // first argument that a function receives. This makes it a lot easier to add
+  // a variable length of arguments to a function call.
   //
-  fn.apply(pagelet, [function returns() {
-    var args = Array.prototype.slice.call(arguments, 0)
-      , success = pagelet.substream.write({ type: 'rpc', args: args, id: id });
-
-    return success;
-  }].concat(args));
-
-  return true;
+  fn.apply(pagelet, [function reply() {
+    pagelet.substream.write({
+      args: Array.prototype.slice.call(arguments, 0),
+      type: 'rpc',
+      id: data.id
+    });
+  }].concat(data.args));
 });
 
 /**
