@@ -341,6 +341,8 @@ persistent id and will differ between every single initialised instance.
 
 ### Pagelet: substream
 
+**read only**
+
 The pagelet can also be initialised through [Primus] so it can be used for
 real-time communication (and make things like [RPC](#pagelet-rpc) work). The
 communication is done over a [substream] which allows primus multiplex the
