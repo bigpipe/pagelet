@@ -1,6 +1,6 @@
 # Pagelet
 
-## Getting Started
+## Installation
 
 In all of the following code examples we assume that the `Pagelet` variable is
 either exposed as:
@@ -14,6 +14,29 @@ Or using the BigPipe framework:
 ```js
 var Pagelet = require('bigpipe').Pagelet;
 ```
+
+## Table of Contents
+
+**Pagelet function**
+- [Pagelet.extend](#pageletextend)
+- [Pagelet.on](#pageleton)
+
+**Pagelet instance**
+- [Pagelet: name](#pagelet-name)
+- [Pagelet: RPC](#pagelet-rpc)
+- [Pagelet: fragment](#pagelet-fragment)
+- [Pagelet: get](#pagelet-get)
+- [Pagelet: authorize](#pagelet-authorize)
+- [Pagelet: initialize](#pagelet-initialize)
+- [Pagelet: remove](#pagelet-remove)
+- [Pagelet: view](#pagelet-view)
+- [Pagelet: error](#pagelet-error)
+- [Pagelet: engine](#pagelet-engine)
+- [Pagelet: css](#pagelet-css)
+- [Pagelet: js](#pagelet-js)
+- [Pagelet: dependencies](#pagelet-dependencies)
+- [Pagelet: id](#pagelet-id)
+- [Pagelet: substream](#pagelet-substream)
 
 ### Pagelet.extend
 
@@ -54,6 +77,8 @@ your code as the `Pagelet.on` method automatically does this for you.
 
 ### Pagelet: name
 
+_required:_ **writable, string**
+
 Every pagelet should have a name, it's one of the ways that [BigPipe] uses to
 identify which pagelet and where it should be loaded on the page. The name
 should be an unique but human readable string as this will be used as value for
@@ -82,6 +107,8 @@ Page.extend({
 
 ### Pagelet: RPC
 
+_optional:_ **writable, array**
+
 The `RPC` array specifies the methods that can be remotely called from the
 client/browser. Please note that they are not actually send to the client as
 these functions will execute on the server and transfer the result back to the
@@ -103,6 +130,8 @@ Pagelet.extend({
 
 ### Pagelet: fragment
 
+_optional:_ **writable, string**
+
 A default fragment is provided via `Pagelet.fragment`, however it is
 possible to overwrite this default fragment with a custom fragment. This fragment
 is used by render to generate content with appropriate data to work with [BigPipe].
@@ -117,6 +146,8 @@ Pagelet.extend({
 ```
 
 ### Pagelet: get
+
+_required:_ **writable, function**
 
 Get provides the data that is used for rendering the output of the Pagelet.
 
@@ -137,6 +168,8 @@ Pagelet.extend({
 ```
 
 ### Pagelet: authorize
+
+_optional:_ **writable, function**
 
 There is the possibility to create private pagelets. These pagelets could require
 special permissions in your application in order to be used. An example of this
@@ -161,7 +194,27 @@ Pagelet.extend({
 }).on(module);
 ```
 
+### Pagelet: initialize
+
+_optional:_ **writable, function**
+
+The pagelet has been initialised. If you have an authorization function this
+function will only be called **after** a successful authorization. If no
+authorization hook is provided it should be called instantly.
+
+```js
+Pagelet.extend({
+  initialize: function () {
+    this.once('event', function () {
+      doStuff();
+    });
+  }
+});
+```
+
 ### Pagelet: remove
+
+_optional:_ **writable, boolean**
 
 This instructs our render engine to remove the pagelet placeholders from the DOM
 structure if we're unauthorized. This makes it easier to create conditional
@@ -178,6 +231,8 @@ Pagelet.extend({
 
 ### Pagelet: view
 
+_required:_ **writable, string**
+
 The view is a reference to the template that we render inside the
 `data-pagelet="<name>"` placeholders. Please make sure that your template can be
 rendered on both the client and server side. Take a look at our [temper] project
@@ -185,19 +240,23 @@ for template engines that we support.
 
 ### Pagelet: error
 
+_optional:_ **writable, string**
+
 Just like the `Pagelet.view` this is a reference to a template that we will
 render in your `data-pagelet="<name>"` placeholders but this template is only
 rendered when:
 
 1. We receive an `Error` argument in our callback that we supply to the
-   `Pagelet#render` method.
-2. Your `Pagelet.view` throws an errow when we're rendering the template.
+   `Pagelet#get` method.
+2. Your `Pagelet.view` throws an error when we're rendering the template.
 
 If this property is not set we will default to a template that ships with this
 Pagelet by default. This template includes a small HTML fragment that states the
 error.
 
 ### Pagelet: engine
+
+_optional:_ **writable, string**
 
 We attempt to detect the correct template engine based on filename as well as
 the template engine's that we can require. It is possible that we make the wrong
@@ -216,6 +275,8 @@ that we use to compile the templates**
 
 ### Pagelet: css
 
+_optional:_ **writable, string**
+
 The location of the styling for **only this** pagelet. You should assume that
 you bundle all the CSS that is required to fully render this pagelet. By
 eliminating inherited CSS it will be easier for you to re-use this pagelet on
@@ -232,6 +293,8 @@ transparently pre-process these files for you. See the [smithy] project for the
 compatible pre-processors.**
 
 ### Pagelet: js
+
+_optional:_ **writable, string**
 
 As you might have guessed, this is the location of the JavaScript that you want
 to have loaded for your pagelet. We use [fortress] to sandbox this JavaScript in
@@ -255,6 +318,40 @@ only designed to prevent code from different pagelets clashing with each other**
 
 ### Pagelet: dependencies
 
+_optional:_ **writable, array**
+
+An array of dependencies that your pagelet depends on which should be loaded in
+advance and available on the page before any CSS or JavaScript is executed. The
+files listed in this array can either a be CSS or JavaScript resource.
+
+```js
+pagelet.extend({
+  dependencies: [
+    'https://google.com/ga.js'
+  ]
+}).on(module);
+```
+
+### Pagelet: id
+
+**read only**
+
+The unique id of a given pagelet instance. Please note that this is not a
+persistent id and will differ between every single initialised instance.
+
+### Pagelet: substream
+
+**read only**
+
+The pagelet can also be initialised through [Primus] so it can be used for
+real-time communication (and make things like [RPC](#pagelet-rpc) work). The
+communication is done over a [substream] which allows primus multiplex the
+connection between various of endpoints.
+
+## License
+
+MIT
+
 [Backbone]: http://backbonejs.com
 [BigPipe]: http://bigpipe.io
 [Page]: http://bigpipe.io#page
@@ -262,3 +359,5 @@ only designed to prevent code from different pagelets clashing with each other**
 [smithy]: http://github.com/observing/smithy
 [fortress]: http://github.com/bigpipe/fortress
 [frag]: https://github.com/bigpipe/pagelet/blob/master/pagelet.fragment
+[Primus]: https://github.com/primus/primus
+[substream]: https://github.com/primus/substream

@@ -4,8 +4,7 @@ var debug = require('debug')('bigpipe:pagelet')
   , FreeList = require('freelist').FreeList
   , Temper = require('temper')
   , fuse = require('fusing')
-  , path = require('path')
-  , fs = require('fs');
+  , path = require('path');
 
 //
 // Create singletonian temper usable for constructed pagelets. This will ensure
@@ -15,19 +14,25 @@ var temper = new Temper;
 
 /**
  * A pagelet is the representation of an item, section, column, widget on the
- * page. It's basically a small sandboxed application within your page.
+ * page. It's basically a small sand boxed application within your page.
  *
  * @constructor
  * @api public
  */
 function Pagelet() {
-  var writable = this.writable = Pagelet.predefine(this, Pagelet.predefine.WRITABLE)
-    , readable = this.readable = Pagelet.predefine(this);
+  this.fuse();
 
-  readable('temper', temper);                          // Template parser.
-  writable('id', null);                                // Custom ID of the pagelet.
+  this.readable('temper', temper);                         // Template parser.
+  this.writable('substream', null);                        // Substream from Primus.
+  this.writable('id', null);                               // Custom ID of the pagelet.
 
-  this.configure();                                    // Prepare the instance.
+  //
+  // Add an correctly namespaced debug method so it easier to see which pagelet
+  // is called by just checking the name of it.
+  //
+  this.readable('debug', require('debug')('bigpipe:pagelet:'+ this.name));
+
+  this.configure();                                   // Prepare the instance.
 }
 
 fuse(Pagelet, require('stream'));
@@ -35,6 +40,7 @@ fuse(Pagelet, require('stream'));
 /**
  * Reset the instance to it's original state.
  *
+ * @returns {Pagelet}
  * @api private
  */
 Pagelet.readable('configure', function configure() {
@@ -45,7 +51,7 @@ Pagelet.readable('configure', function configure() {
     return Math.random().toString(36).substring(2).toUpperCase();
   }).join('-');
 
-  debug('configuring %s/%s', this.name, this.id);
+  this.debug('configuring %s/%s', this.name, this.id);
   return this.removeAllListeners();
 });
 
@@ -102,12 +108,20 @@ Pagelet.writable('RPC', []);
 Pagelet.writable('authorize', null);
 
 /**
+ * A pagelet has been initialised.
+ *
+ * @type {Function}
+ * @public
+ */
+Pagelet.writable('initialize', null);
+
+/**
  * The actual chunk of the response that is written for each pagelet.
  *
  * @type {String}
  * @private
  */
-Pagelet.writable('fragment', fs.readFileSync(__dirname +'/pagelet.fragment', 'utf-8')
+Pagelet.writable('fragment', require('fs').readFileSync(__dirname +'/pagelet.fragment', 'utf-8')
   .split('\n')
   .join('')
 );
@@ -194,7 +208,7 @@ Pagelet.writable('dependencies', []);
  * fetching assets from the correct location.
  *
  * @type {String}
- * @public
+ * @private
  */
 Pagelet.writable('directory', '');
 
@@ -202,7 +216,7 @@ Pagelet.writable('directory', '');
  * Default asynchronous get function. Override to provide specific data to the
  * render function.
  *
- * @type {Function}
+ * @param {Function} done Completion callback when we've received data to render
  * @api public
  */
 Pagelet.writable('get', function get(done) {
@@ -229,6 +243,7 @@ Pagelet.writable('get', function get(done) {
  *
  * @param {Object} options Add post render functionality.
  * @param {Function} done Completion callback.
+ * @returns {Pagelet}
  * @api private
  */
 Pagelet.readable('render', function render(options, done) {
@@ -252,8 +267,7 @@ Pagelet.readable('render', function render(options, done) {
   // which `after` can be called in proper context.
   //
   pagelet.get(function receive(err, data) {
-    var fetch = pagelet.temper.fetch
-      , view = fetch(pagelet.view).server
+    var view = pagelet.temper.fetch(pagelet.view).server
       , content;
 
     //
@@ -266,7 +280,7 @@ Pagelet.readable('render', function render(options, done) {
     //
     try {
       if (err) {
-        debug('render %s/%s resulted in a error', pagelet.name, pagelet.id, err);
+        pagelet.debug('render %s/%s resulted in a error', pagelet.name, pagelet.id, err);
         throw err;
       }
 
@@ -281,7 +295,7 @@ Pagelet.readable('render', function render(options, done) {
       //
       if (!pagelet.error) throw e;
 
-      content = fetch(pagelet.error).server(pagelet.merge(data, {
+      content = pagelet.temper.fetch(pagelet.error).server(pagelet.merge(data, {
         reason: 'Failed to render '+ pagelet.name +' as the template throws an error',
         message: e.message,
         stack: e.stack
@@ -306,55 +320,89 @@ Pagelet.readable('render', function render(options, done) {
 
     done(undefined, content);
   });
+
+  return this;
 });
 
 /**
- * Trigger a RPC function.
+ * Connect with a Primus substream.
  *
- * @param {String} method The name of the method.
- * @param {Array} args The function arguments.
- * @param {String} id The RPC id.
- * @param {SubStream} substream The substream that does RPC.
- * @returns {Boolean} The event was triggered.
+ * @param {Spark} spark The Primus connection.
+ * @param {Function} next The completion callback
+ * @returns {Pagelet}
  * @api private
  */
-Pagelet.readable('trigger', function trigger(method, args, id, substream) {
-  var index = this.RPC.indexOf(method)
+Pagelet.readable('connect', function connect(spark, next) {
+  var pagelet = this;
+
+  /**
+   * Create a new substream.
+   *
+   * @param {Boolean} authorized Allowed to use this pagelet.
+   * @returns {Pagelet}
+   * @api private
+   */
+  function substream(authorized) {
+    if (!authorized) return next(new Error('Unauthorized to access this pagelet'));
+
+    var stream = pagelet.substream = spark.substream(pagelet.name);
+
+    stream.once('end', pagelet.emits('end'));
+    stream.on('data', function streamed(data) {
+      switch (data.type) {
+        case 'rpc':
+          // pagelet.trigger(data.method, data.args, data.id);
+          pagelet.call(data);
+        break;
+
+        case 'emit':
+          pagelet.emit.apply(pagelet, [data.name].concat(data.args));
+        break;
+
+        // @TODO handle get/post/put
+      }
+    });
+
+    next(undefined, pagelet);
+    return pagelet;
+  }
+
+  if ('function' !== this.authorize) return substream(true);
+  this.authorize(spark.request, substream);
+
+  return this;
+});
+
+/**
+ * Call an rpc method.
+ *
+ * @param {Object} data The RPC call information.
+ * @api private
+ */
+Pagelet.readable('call', function calls(data) {
+  var index = this.RPC.indexOf(data.method)
+    , fn = this[data.method]
+    , pagelet = this
     , err;
 
-  if (!~index) {
-    debug('%s/%s received an unknown method `%s`, ignorning rpc', this.name, this.id, method);
-    return substream.write({
-      args: [new Error('The given method is not allowed as RPC function.')],
-      type: 'rpc',
-      id: id
-    });
-  }
-
-  var fn = this[this.RPC[index]]
-    , pagelet = this;
-
-  if ('function' !== typeof fn) {
-    debug('%s/%s method `%s` is not a function, ignoring rpc', this.name, this.id, method);
-    return substream.write({
-      args: [new Error('The called method is not an RPC function.')],
-      type: 'rpc',
-      id: id
-    });
-  }
+  if (!~index || 'function' !== typeof fn) return this.substream.write({
+    args: [new Error('RPC method is not known')],
+    type: 'rpc',
+    id: data.id
+  });
 
   //
-  // We've found a working function, assume that function is RPC compatible
-  // where it accepts a `returns` function that receives the arguments.
+  // Our RPC pattern is a callback first pattern, where the callback is the
+  // first argument that a function receives. This makes it a lot easier to add
+  // a variable length of arguments to a function call.
   //
-  fn.apply(this, [function returns() {
-    var args = Array.prototype.slice.call(arguments, 0)
-      , success = substream.write({ type: 'rpc', args: args, id: id });
-
-    return success;
-  }].concat(args));
-
-  return true;
+  fn.apply(pagelet, [function reply() {
+    pagelet.substream.write({
+      args: Array.prototype.slice.call(arguments, 0),
+      type: 'rpc',
+      id: data.id
+    });
+  }].concat(data.args));
 });
 
 /**
@@ -368,6 +416,7 @@ Pagelet.readable('trigger', function trigger(method, args, id, substream) {
  * ```
  *
  * @param {Module} module The reference to the module object.
+ * @returns {Pagelet}
  * @api public
  */
 Pagelet.on = function on(module) {
@@ -382,6 +431,7 @@ Pagelet.on = function on(module) {
  * serving the requests.
  *
  * @param {Function} hook Hook into optimize, function will be called with Pagelet.
+ * @returns {Pagelet}
  * @api private
  */
 Pagelet.optimize = function optimize(hook) {
@@ -460,6 +510,8 @@ Pagelet.optimize = function optimize(hook) {
       Pagelet.freelist.free(pagelet);
       pagelet = null;
     });
+
+    return pagelet;
   });
 
   return Pagelet;
