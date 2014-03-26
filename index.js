@@ -354,7 +354,8 @@ Pagelet.readable('render', function render(options, fn) {
       if (!pagelet.error) return fn(e);
 
       content = pagelet.temper.fetch(pagelet.error).server(pagelet.merge(data, {
-        reason: 'Failed to render '+ pagelet.name +' as the template throws an error',
+        reason: 'Failed to render: '+ pagelet.name,
+        env: process.env.NODE_ENV || 'development',
         message: e.message,
         stack: e.stack
       }));
