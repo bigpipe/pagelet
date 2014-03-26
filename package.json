@@ -23,7 +23,8 @@
   "dependencies": {
     "debug": "~0.7.x",
     "fusing": "~0.2.x",
-    "temper": "~0.1.4"
+    "temper": "~0.1.x",
+    "json-stringify-safe": "~5.0.x"
   },
   "devDependencies": {
     "chai": "1.8.x",

@@ -1,6 +1,7 @@
 'use strict';
 
 var debug = require('debug')('bigpipe:pagelet')
+  , stringify = require('json-stringify-safe')
   , FreeList = require('freelist').FreeList
   , Temper = require('temper')
   , fuse = require('fusing')
@@ -22,9 +23,10 @@ var temper = new Temper;
 function Pagelet() {
   this.fuse();
 
-  this.readable('temper', temper);                         // Template parser.
-  this.writable('substream', null);                        // Substream from Primus.
-  this.writable('id', null);                               // Custom ID of the pagelet.
+  this.readable('temper', temper);                        // Template parser.
+  this.writable('_authorized', null);                     // Are we authorized
+  this.writable('substream', null);                       // Substream from Primus.
+  this.writable('id', null);                              // Custom ID of the pagelet.
 
   //
   // Add an correctly namespaced debug method so it easier to see which pagelet
@@ -32,7 +34,7 @@ function Pagelet() {
   //
   this.readable('debug', require('debug')('bigpipe:pagelet:'+ this.name));
 
-  this.configure();                                   // Prepare the instance.
+  this.configure();                                        // Prepare the instance.
 }
 
 fuse(Pagelet, require('stream'));
@@ -44,6 +46,8 @@ fuse(Pagelet, require('stream'));
  * @api private
  */
 Pagelet.readable('configure', function configure() {
+  this.debug('configuring %s/%s', this.name, this.id);
+
   //
   // Set a new id.
   //
@@ -51,7 +55,9 @@ Pagelet.readable('configure', function configure() {
     return Math.random().toString(36).substring(2).toUpperCase();
   }).join('-');
 
-  this.debug('configuring %s/%s', this.name, this.id);
+  if (this.substream) this.substream.end();
+  this.substream = this._authorized = null;
+
   return this.removeAllListeners();
 });
 
@@ -106,6 +112,23 @@ Pagelet.writable('RPC', []);
  * @public
  */
 Pagelet.writable('authorize', null);
+
+/**
+ * Checks if we're an authorized Pagelet.
+ *
+ * @type {Boolean}
+ * @private
+ */
+Pagelet.writable('authorized', {
+  get: function get() {
+    return 'function' !== typeof this.authorize       // No authorization needed.
+    || this._authorized && this._authorized !== null; // Authorization has been done.
+  },
+
+  set: function set(value) {
+    return this._authorized = !!value;
+  }
+}, true);
 
 /**
  * A pagelet has been initialised.
@@ -237,30 +260,65 @@ Pagelet.writable('get', function get(done) {
  * Render takes care of all the data merging and `get` invocation.
  *
  * Options:
- *   - after: Post render function to call.
  *   - context: Context on which to call `after`, defaults to pagelet.
  *   - data: stringified object representation to pass to the client.
  *
  * @param {Object} options Add post render functionality.
- * @param {Function} done Completion callback.
+ * @param {Function} fn Completion callback.
  * @returns {Pagelet}
  * @api private
  */
-Pagelet.readable('render', function render(options, done) {
-  var pagelet = this;
-
-  if ('undefined' === typeof done) {
-    done = options;
+Pagelet.readable('render', function render(options, fn) {
+  if ('undefined' === typeof fn) {
+    fn = options;
     options = {};
   }
 
-  //
-  // Check for the presence of options and provide pagelet as default for context.
-  // Data will be passed to the client as a stringified representation of an object.
-  //
   options = options || {};
-  options.data = options.data || '{}';
-  options.context = options.context || pagelet;
+
+  var context = options.context || this
+    , authorized = this.authorized
+    , data = options.data || {}
+    , pagelet = this;
+
+  data.id = data.id || this.id;                         // Pagelet id.
+  data.rpc = data.rpc || this.RPC;                      // RPC methods.
+  data.remove = authorized ? false : this.remove;       // Remove from DOM.
+  data.authorized = authorized;                         // Pagelet was authorized.
+
+  /**
+   * Write the fragmented data.
+   *
+   * @param {String} content The content to respond with.
+   * @returns {Pagelet}
+   * @api private
+   */
+  function fragment(content) {
+    data = stringify(data, function sanitize(key, data) {
+      if ('string' !== typeof data) return data;
+
+      return data
+      .replace(/&/gm, '&amp;')
+      .replace(/</gm, '&lt;')
+      .replace(/>/gm, '&gt;')
+      .replace(/"/gm, '&quote;')
+      .replace(/'/gm, '&#x27;');
+    });
+
+    fn.call(context, undefined, pagelet.fragment
+      .replace(/\{pagelet::name\}/g, pagelet.name)
+      .replace(/\{pagelet::template\}/g, content.replace(/<!--(.|\s)*?-->/, ''))
+      .replace(/\{pagelet::data\}/g, data)
+    );
+
+    return pagelet;
+  }
+
+  //
+  // If we're not authorized, directly call the render method with empty
+  // content. So it renders nothing.
+  //
+  if (!authorized) return fragment('');
 
   //
   // Invoke the provided get function and make sure options is an object, from
@@ -281,7 +339,7 @@ Pagelet.readable('render', function render(options, done) {
     try {
       if (err) {
         pagelet.debug('render %s/%s resulted in a error', pagelet.name, pagelet.id, err);
-        throw err;
+        throw err; // Throw so we can capture it again.
       }
 
       content = view(data);
@@ -293,7 +351,7 @@ Pagelet.readable('render', function render(options, done) {
       // office and smear you with peck and feathers for not writing a more stable
       // application.
       //
-      if (!pagelet.error) throw e;
+      if (!pagelet.error) return fn(e);
 
       content = pagelet.temper.fetch(pagelet.error).server(pagelet.merge(data, {
         reason: 'Failed to render '+ pagelet.name +' as the template throws an error',
@@ -302,23 +360,7 @@ Pagelet.readable('render', function render(options, done) {
       }));
     }
 
-    //
-    // Add the Pagelet name and content to the fragment placeholder.
-    //
-    content = pagelet.fragment
-      .replace(/\{pagelet::name\}/g, pagelet.name)
-      .replace(/\{pagelet::template\}/g, content.replace(/<!--(.|\s)*?-->/, ''))
-      .replace(/\{pagelet::data\}/g, options.data);
-
-    //
-    // Post render hook, e.g. from BigPipe's perspective this will be most
-    // likely page.write, but any function may be passed.
-    //
-    if (options.after) {
-      return options.after.call(options.context, content, done);
-    }
-
-    done(undefined, content);
+    fragment(content);
   });
 
   return this;
@@ -371,6 +413,28 @@ Pagelet.readable('connect', function connect(spark, next) {
   this.authorize(spark.request, substream);
 
   return this;
+});
+
+/**
+ * Authenticate the Pagelet.
+ *
+ * @param {Request} req The HTTP request.
+ * @param {Function} fn The authorized callback.
+ * @returns {Pagelet}
+ * @api private
+ */
+Pagelet.readable('authenticate', function authenticate(req, fn) {
+  var pagelet = this;
+
+  if ('function' !== typeof this.authorize) {
+    fn(pagelet.authorized = true);
+  } else {
+    pagelet.authorize(req, function authorized(value) {
+      fn(pagelet.authorized = value);
+    });
+  }
+
+  return pagelet;
 });
 
 /**
