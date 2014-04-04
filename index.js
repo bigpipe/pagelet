@@ -485,7 +485,7 @@ Pagelet.readable('call', function calls(data) {
  * @api public
  */
 Pagelet.on = function on(module) {
-  this.prototype.directory = this.prototype.directory || path.dirname(module.filename);
+  this.prototype.directory = path.dirname(module.filename);
   module.exports = this;
 
   return this;
