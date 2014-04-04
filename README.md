@@ -1,4 +1,8 @@
-# Pagelet
+# Pagelet [![Build Status][status]](https://travis-ci.org/bigpipe/pagelet) [![NPM version][npmimgurl]](http://badge.fury.io/js/pagelet) [![Coverage Status][coverage]](http://coveralls.io/r/bigpipe/pagelet?branch=master)
+
+[status]: https://travis-ci.org/bigpipe/pagelet.png
+[npmimgurl]: https://badge.fury.io/js/pagelet.png
+[coverage]: http://coveralls.io/repos/bigpipe/pagelet/badge.png?branch=master
 
 ## Installation
 
