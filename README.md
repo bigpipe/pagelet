@@ -36,6 +36,7 @@ var Pagelet = require('bigpipe').Pagelet;
 - [Pagelet: view](#pagelet-view)
 - [Pagelet: error](#pagelet-error)
 - [Pagelet: engine](#pagelet-engine)
+- [Pagelet: query](#pagelet-query)
 - [Pagelet: css](#pagelet-css)
 - [Pagelet: js](#pagelet-js)
 - [Pagelet: dependencies](#pagelet-dependencies)
@@ -276,6 +277,29 @@ Pagelet.extend({
 
 **Please note that the engine needs to be compatible with the [temper] module
 that we use to compile the templates**
+
+### Pagelet: query
+
+_optional:_ **writable, array**
+
+For optimal performance the data that is send to the client will be minimal
+and dependant on they query that is provided. Data can be supplied to the client
+by listing the keys (nested paths in dot notation) of which the data should be
+send to the client. In the example only the content of `mydata` and `nested.is`
+will be send.
+
+```js
+Pagelet.extend({
+  query: [ 'mydata', 'nested.is' ],
+  get: function get(done) {
+    done(null, {
+      mydata: 'test',
+      nested: { is: 'allowed', left: 'alone' },
+      more: 'data'
+    });
+  }
+}).on(module);
+```
 
 ### Pagelet: css
 
