@@ -3,6 +3,7 @@
 var debug = require('debug')('bigpipe:pagelet')
   , stringify = require('json-stringify-safe')
   , FreeList = require('freelist').FreeList
+  , dot = require('dot-component')
   , Temper = require('temper')
   , fuse = require('fusing')
   , path = require('path');
@@ -174,6 +175,15 @@ Pagelet.writable('remove', true);
 Pagelet.writable('view', '');
 
 /**
+ * List of keys in the data that will be supplied to the client-side script.
+ * Paths to nested keys can be supplied via dot notation.
+ *
+ * @type {Array}
+ * @public
+ */
+Pagelet.writable('query', []);
+
+/**
  * The location of your error template. This template will be rendered when:
  *
  * 1. We receive an `error` argument from your `get` method.
@@ -279,6 +289,7 @@ Pagelet.readable('render', function render(options, fn) {
   var context = options.context || this
     , authorized = this.authorized
     , data = options.data || {}
+    , query = this.query
     , pagelet = this;
 
   data.id = data.id || this.id;                         // Pagelet id.
@@ -324,7 +335,7 @@ Pagelet.readable('render', function render(options, fn) {
   // Invoke the provided get function and make sure options is an object, from
   // which `after` can be called in proper context.
   //
-  pagelet.get(function receive(err, data) {
+  pagelet.get(function receive(err, result) {
     var view = pagelet.temper.fetch(pagelet.view).server
       , content;
 
@@ -342,7 +353,7 @@ Pagelet.readable('render', function render(options, fn) {
         throw err; // Throw so we can capture it again.
       }
 
-      content = view(data);
+      content = view(result);
     } catch (e) {
       //
       // This is basically fly or die, if the supplied error template throws an
@@ -353,12 +364,22 @@ Pagelet.readable('render', function render(options, fn) {
       //
       if (!pagelet.error) return fn(e);
 
-      content = pagelet.temper.fetch(pagelet.error).server(pagelet.merge(data, {
+      content = pagelet.temper.fetch(pagelet.error).server(pagelet.merge(result, {
         reason: 'Failed to render: '+ pagelet.name,
         env: process.env.NODE_ENV || 'development',
         message: e.message,
         stack: e.stack
       }));
+    }
+
+    //
+    // Add queried parts of data, so the client-side script can use it.
+    //
+    if ('object' === typeof result && Array.isArray(query)) {
+      data.data = query.reduce(function find(memo, q) {
+        memo[q] = dot.get(result, q);
+        return memo;
+      }, {});
     }
 
     fragment(content);
