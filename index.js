@@ -12,7 +12,7 @@ var debug = require('debug')('bigpipe:pagelet')
 // Create singletonian temper usable for constructed pagelets. This will ensure
 // caching works properly and allows optimize to use temper.
 //
-var temper = new Temper;
+var temper = new Temper();
 
 /**
  * A pagelet is the representation of an item, section, column, widget on the
@@ -24,9 +24,9 @@ var temper = new Temper;
 function Pagelet() {
   this.fuse();
 
-  this.readable('temper', temper);                        // Template parser.
   this.writable('_authorized', null);                     // Are we authorized
   this.writable('substream', null);                       // Substream from Primus.
+  this.readable('temper', temper);                        // Template parser.
   this.writable('id', null);                              // Custom ID of the pagelet.
 
   //
@@ -35,7 +35,7 @@ function Pagelet() {
   //
   this.readable('debug', require('debug')('bigpipe:pagelet:'+ this.name));
 
-  this.configure();                                        // Prepare the instance.
+  this.configure();
 }
 
 fuse(Pagelet, require('stream'));
@@ -56,6 +56,9 @@ Pagelet.readable('configure', function configure() {
     return Math.random().toString(36).substring(2).toUpperCase();
   }).join('-');
 
+  //
+  // Clean up possible old references.
+  //
   if (this.substream) this.substream.end();
   this.substream = this._authorized = null;
 
@@ -423,6 +426,11 @@ Pagelet.readable('connect', function connect(spark, next) {
           pagelet.emit.apply(pagelet, [data.name].concat(data.args));
         break;
 
+        case 'get':
+          pagelet.render(function renderd(err, fragment) {
+            pagelet.write({ type: 'fragment', fragment: fragment, err: err });
+          });
+        break;
         // @TODO handle get/post/put
       }
     });
@@ -533,8 +541,8 @@ Pagelet.optimize = function optimize(hook) {
 
   debug('Optimizing pagelet %s for FreeList', prototype.name);
   if (prototype.view) {
-    Pagelet.prototype.view = path.resolve(dir, prototype.view);
-    temper.prefetch(Pagelet.prototype.view, Pagelet.prototype.engine);
+    prototype.view = path.resolve(dir, prototype.view);
+    temper.prefetch(prototype.view, prototype.engine);
   }
 
   //
@@ -542,22 +550,22 @@ Pagelet.optimize = function optimize(hook) {
   // fragment.
   //
   if (prototype.error) {
-    Pagelet.prototype.error = path.resolve(dir, prototype.error);
-    temper.prefetch(Pagelet.prototype.error, Pagelet.prototype.engine);
+    prototype.error = path.resolve(dir, prototype.error);
+    temper.prefetch(prototype.error, prototype.engine);
   } else {
-    Pagelet.prototype.error = path.resolve(__dirname, 'error.ejs');
-    temper.prefetch(Pagelet.prototype.error, '');
+    prototype.error = path.resolve(__dirname, 'error.ejs');
+    temper.prefetch(prototype.error, '');
   }
 
-  if (prototype.css) Pagelet.prototype.css = path.resolve(dir, prototype.css);
-  if (prototype.js) Pagelet.prototype.js = path.resolve(dir, prototype.js);
+  if (prototype.css) prototype.css = path.resolve(dir, prototype.css);
+  if (prototype.js) prototype.js = path.resolve(dir, prototype.js);
 
   //
   // Make sure that all our dependencies are also directly mapped to an
   // absolute URL.
   //
   if (prototype.dependencies) {
-    Pagelet.prototype.dependencies = prototype.dependencies.map(function each(dep) {
+    prototype.dependencies = prototype.dependencies.map(function each(dep) {
       if (/^(http:|https:)?\/\//.test(dep)) return dep;
       return path.resolve(dir, dep);
     });
@@ -569,11 +577,15 @@ Pagelet.optimize = function optimize(hook) {
   // also the use of CAPS like `RPC` vs `rpc`
   //
   if (Array.isArray(prototype.rpc) && !prototype.RPC.length) {
-    Pagelet.prototype.RPC = prototype.rpc;
+    prototype.RPC = prototype.rpc;
+  }
+
+  if ('string' === typeof prototype.RPC) {
+    prototype.RPC= prototype.RPC.split(/[\s|\,]/);
   }
 
   if ('function' === typeof prototype.initialise) {
-    Pagelet.prototype.initialize = prototype.initialise;
+    prototype.initialize = prototype.initialise;
   }
 
   //
@@ -589,16 +601,20 @@ Pagelet.optimize = function optimize(hook) {
   // Setup a FreeList for the pagelets so we can re-use the pagelet
   // instances and reduce garbage collection.
   //
-  Pagelet.freelist = new FreeList('pagelet', Pagelet.prototype.freelist || 1000, function allocate() {
-    var pagelet = new Pagelet();
+  Pagelet.freelist = new FreeList(
+    'pagelet',
+    prototype.freelist || 1000,
+    function allocate() {
+      var pagelet = new Pagelet();
 
-    pagelet.once('free', function free() {
-      Pagelet.freelist.free(pagelet);
-      pagelet = null;
-    });
+      pagelet.once('free', function free() {
+        Pagelet.freelist.free(pagelet);
+        pagelet = null;
+      });
 
-    return pagelet;
-  });
+      return pagelet;
+    }
+  );
 
   return Pagelet;
 };
