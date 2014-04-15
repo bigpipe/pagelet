@@ -452,10 +452,11 @@ Pagelet.readable('connect', function connect(spark, next) {
 
         case 'get':
           pagelet.render({ substream: true }, function renderd(err, fragment) {
-            pagelet.write({ type: 'fragment', fragment: fragment, err: err });
+            stream.write({ type: 'fragment', fragment: fragment, err: err });
           });
         break;
-        // @TODO handle get/post/put
+
+        // @TODO handle post/put
       }
     });
 
