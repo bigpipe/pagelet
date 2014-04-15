@@ -1,7 +1,7 @@
 'use strict';
 
 var debug = require('debug')('bigpipe:pagelet')
-  , stringify = require('json-stringify-safe')
+  , jstringify = require('json-stringify-safe')
   , FreeList = require('freelist').FreeList
   , dot = require('dot-component')
   , Temper = require('temper')
@@ -63,6 +63,26 @@ Pagelet.readable('configure', function configure() {
   this.substream = this._authorized = null;
 
   return this.removeAllListeners();
+});
+
+/**
+ * A safe and fast `JSON.stringify`.
+ *
+ * @param {Mixed} data Data that needs to be transformed in to a string.
+ * @param {Function} replacer Data replacer.
+ * @returns {String}
+ * @api public
+ */
+Pagelet.readable('stringify', function stringify(data, replacer) {
+  var result;
+
+  try { result = JSON.stringify(data, replacer); }
+  catch (e) {
+    this.debug('Failed to normally stringify the data');
+    result = jstringify(data, replacer);
+  }
+
+  return result;
 });
 
 /**
@@ -308,7 +328,12 @@ Pagelet.readable('render', function render(options, fn) {
    * @api private
    */
   function fragment(content) {
-    data = stringify(data, function sanitize(key, data) {
+    if (options.substream) {
+      data.view = content;
+      return fn.call(context, undefined, data);
+    }
+
+    data = pagelet.stringify(data, function sanitize(key, data) {
       if ('string' !== typeof data) return data;
 
       return data
@@ -418,7 +443,6 @@ Pagelet.readable('connect', function connect(spark, next) {
     stream.on('data', function streamed(data) {
       switch (data.type) {
         case 'rpc':
-          // pagelet.trigger(data.method, data.args, data.id);
           pagelet.call(data);
         break;
 
@@ -427,7 +451,7 @@ Pagelet.readable('connect', function connect(spark, next) {
         break;
 
         case 'get':
-          pagelet.render(function renderd(err, fragment) {
+          pagelet.render({ substream: true }, function renderd(err, fragment) {
             pagelet.write({ type: 'fragment', fragment: fragment, err: err });
           });
         break;
