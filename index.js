@@ -452,11 +452,24 @@ Pagelet.readable('connect', function connect(spark, next) {
 
         case 'get':
           pagelet.render({ substream: true }, function renderd(err, fragment) {
-            stream.write({ type: 'fragment', fragment: fragment, err: err });
+            stream.write({ type: 'fragment', frag: fragment, err: err });
           });
         break;
 
-        // @TODO handle post/put
+        case 'post':
+        case 'put':
+          if (!(data.type in pagelet)) {
+            return stream.write({ type: data.type, err: new Error('Method not supported by pagelet') });
+          }
+
+          pagelet[data.type](data.body || {}, data.files || [], function processed(err, data) {
+            if (err) return stream.write({ type: data.type, err: err });
+
+            pagelet.render({ data: data, substream: true }, function rendered(err, fragment) {
+              stream.write({ type: 'fragment', frag: fragment, err: err });
+            });
+          });
+        break;
       }
     });
 
