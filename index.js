@@ -396,7 +396,8 @@ Pagelet.readable('render', function render(options, fn) {
         reason: 'Failed to render: '+ pagelet.name,
         env: process.env.NODE_ENV || 'development',
         message: e.message,
-        stack: e.stack
+        stack: e.stack,
+        error: e
       }));
     }
 
