@@ -26,22 +26,22 @@ var Pagelet = require('bigpipe').Pagelet;
 - [Pagelet.on](#pageleton)
 
 **Pagelet instance**
-- [Pagelet: name](#pagelet-name)
-- [Pagelet: RPC](#pagelet-rpc)
-- [Pagelet: fragment](#pagelet-fragment)
-- [Pagelet: get](#pagelet-get)
-- [Pagelet: authorize](#pagelet-authorize)
-- [Pagelet: initialize](#pagelet-initialize)
-- [Pagelet: remove](#pagelet-remove)
-- [Pagelet: view](#pagelet-view)
-- [Pagelet: error](#pagelet-error)
-- [Pagelet: engine](#pagelet-engine)
-- [Pagelet: query](#pagelet-query)
-- [Pagelet: css](#pagelet-css)
-- [Pagelet: js](#pagelet-js)
-- [Pagelet: dependencies](#pagelet-dependencies)
-- [Pagelet: id](#pagelet-id)
-- [Pagelet: substream](#pagelet-substream)
+- [Pagelet.name](#pageletname)
+- [Pagelet.RPC](#pageletrpc)
+- [Pagelet.fragment](#pageletfragment)
+- [Pagelet.remove](#pageletremove)
+- [Pagelet.view](#pageletview)
+- [Pagelet.error](#pageleterror)
+- [Pagelet.engine](#pageletengine)
+- [Pagelet.query](#pageletquery)
+- [Pagelet.css](#pageletcss)
+- [Pagelet.js](#pageletjs)
+- [Pagelet.dependencies](#pageletdependencies)
+- [Pagelet.get()](#pageletget)
+- [Pagelet.authorize()](#pageletauthorize)
+- [Pagelet.initialize()](#pageletinitialize)
+- [Pagelet.id](#pageletid)
+- [Pagelet.substream](#pageletsubstream)
 
 ### Pagelet.extend
 
@@ -80,7 +80,7 @@ Pagelet.extend({
 This has the added benefit of no longer needing to do `module.exports = ..` in
 your code as the `Pagelet.on` method automatically does this for you.
 
-### Pagelet: name
+### Pagelet.name
 
 _required:_ **writable, string**
 
@@ -110,7 +110,24 @@ Page.extend({
 }).on(module);
 ```
 
-### Pagelet: RPC
+### Pagelet.streaming
+
+_optional:_ **writable, boolean**
+
+When enabled we will stream the submit of each form that is within a Pagelet to
+the server instead of using the default full page refreshes. After sending the
+data the resulting HTML will be used to only update the contents of the pagelet.
+
+If you want to opt-out of this with one form you can add a
+`data-pagelet-async="false"` attribute to the form element.
+
+```js
+Pagelet.extend({
+  streaming: true
+});
+```
+
+### Pagelet.RPC
 
 _optional:_ **writable, array**
 
@@ -133,7 +150,7 @@ Pagelet.extend({
 }).on(module);
 ```
 
-### Pagelet: fragment
+### Pagelet.fragment
 
 _optional:_ **writable, string**
 
@@ -150,7 +167,150 @@ Pagelet.extend({
 }).on(module);
 ```
 
-### Pagelet: get
+### Pagelet.remove
+
+_optional:_ **writable, boolean**
+
+This instructs our render engine to remove the pagelet placeholders from the DOM
+structure if we're unauthorized. This makes it easier to create conditional
+layouts without having to worry about DOM elements that are left behind.
+
+**Default value**: `true`
+
+```js
+Pagelet.extend({
+  authorize: auth,
+  remove: false
+}).on(module);
+```
+
+### Pagelet.view
+
+_required:_ **writable, string**
+
+The view is a reference to the template that we render inside the
+`data-pagelet="<name>"` placeholders. Please make sure that your template can be
+rendered on both the client and server side. Take a look at our [temper] project
+for template engines that we support.
+
+### Pagelet.error
+
+_optional:_ **writable, string**
+
+Just like the `Pagelet.view` this is a reference to a template that we will
+render in your `data-pagelet="<name>"` placeholders but this template is only
+rendered when:
+
+1. We receive an `Error` argument in our callback that we supply to the
+   `Pagelet#get` method.
+2. Your `Pagelet.view` throws an error when we're rendering the template.
+
+If this property is not set we will default to a template that ships with this
+Pagelet by default. This template includes a small HTML fragment that states the
+error.
+
+### Pagelet.engine
+
+_optional:_ **writable, string**
+
+We attempt to detect the correct template engine based on filename as well as
+the template engine's that we can require. It is possible that we make the wrong
+assumption and you wanted to use `handlebars` for your `.mustache` based
+templates but it choose to use `hogan.js` instead.
+
+```js
+Pagelet.extend({
+  view: 'sidebar.mustache',
+  engine: 'handlebars'
+}).on(module);
+```
+
+**Please note that the engine needs to be compatible with the [temper] module
+that we use to compile the templates**
+
+### Pagelet.query
+
+_optional:_ **writable, array**
+
+For optimal performance the data that is send to the client will be minimal
+and dependant on they query that is provided. Data can be supplied to the client
+by listing the keys (nested paths in dot notation) of which the data should be
+send to the client. In the example only the content of `mydata` and `nested.is`
+will be send.
+
+```js
+Pagelet.extend({
+  query: [ 'mydata', 'nested.is' ],
+  get: function get(done) {
+    done(null, {
+      mydata: 'test',
+      nested: { is: 'allowed', left: 'alone' },
+      more: 'data'
+    });
+  }
+}).on(module);
+```
+
+### Pagelet.css
+
+_optional:_ **writable, string**
+
+The location of the styling for **only this** pagelet. You should assume that
+you bundle all the CSS that is required to fully render this pagelet. By
+eliminating inherited CSS it will be easier for you to re-use this pagelet on
+other pages as well as in other projects.
+
+```js
+Pagelet.extend({
+  css: './my-little-pony.styl'
+}).on(module);
+```
+
+**Please note that this doesn't have to be a `.css` file as we will
+transparently pre-process these files for you. See the [smithy] project for the
+compatible pre-processors.**
+
+### Pagelet.js
+
+_optional:_ **writable, string**
+
+As you might have guessed, this is the location of the JavaScript that you want
+to have loaded for your pagelet. We use [fortress] to sandbox this JavaScript in
+a dedicated `iframe` so the code you write is not affected and will not affect
+other pagelets on the same page. This also makes it relatively save to extend
+the build-in primitives of JavaScript (adding new properties to Array etc).
+
+Unlike the `view` and `css` we do not pre-process the JavaScript. But this does
+not mean you cannot use CoffeeScript or other pre-processed languages inside a
+Pagelet. It just means that you have to compile your files to a proper
+JavaScript file and point to that location instead.
+
+```js
+Pagelet.extend({
+  js: './library.js'
+}).on(module);
+```
+
+**Please note that the sandboxing is not there as a security feature, it was
+only designed to prevent code from different pagelets clashing with each other**
+
+### Pagelet.dependencies
+
+_optional:_ **writable, array**
+
+An array of dependencies that your pagelet depends on which should be loaded in
+advance and available on the page before any CSS or JavaScript is executed. The
+files listed in this array can either a be CSS or JavaScript resource.
+
+```js
+pagelet.extend({
+  dependencies: [
+    'https://google.com/ga.js'
+  ]
+}).on(module);
+```
+
+### Pagelet.get()
 
 _required:_ **writable, function**
 
@@ -172,7 +332,7 @@ Pagelet.extend({
 }).on(module);
 ```
 
-### Pagelet: authorize
+### Pagelet.authorize()
 
 _optional:_ **writable, function**
 
@@ -199,7 +359,7 @@ Pagelet.extend({
 }).on(module);
 ```
 
-### Pagelet: initialize
+### Pagelet.initialize()
 
 _optional:_ **writable, function**
 
@@ -217,163 +377,20 @@ Pagelet.extend({
 });
 ```
 
-### Pagelet: remove
-
-_optional:_ **writable, boolean**
-
-This instructs our render engine to remove the pagelet placeholders from the DOM
-structure if we're unauthorized. This makes it easier to create conditional
-layouts without having to worry about DOM elements that are left behind.
-
-**Default value**: `true`
-
-```js
-Pagelet.extend({
-  authorize: auth,
-  remove: false
-}).on(module);
-```
-
-### Pagelet: view
-
-_required:_ **writable, string**
-
-The view is a reference to the template that we render inside the
-`data-pagelet="<name>"` placeholders. Please make sure that your template can be
-rendered on both the client and server side. Take a look at our [temper] project
-for template engines that we support.
-
-### Pagelet: error
-
-_optional:_ **writable, string**
-
-Just like the `Pagelet.view` this is a reference to a template that we will
-render in your `data-pagelet="<name>"` placeholders but this template is only
-rendered when:
-
-1. We receive an `Error` argument in our callback that we supply to the
-   `Pagelet#get` method.
-2. Your `Pagelet.view` throws an error when we're rendering the template.
-
-If this property is not set we will default to a template that ships with this
-Pagelet by default. This template includes a small HTML fragment that states the
-error.
-
-### Pagelet: engine
-
-_optional:_ **writable, string**
-
-We attempt to detect the correct template engine based on filename as well as
-the template engine's that we can require. It is possible that we make the wrong
-assumption and you wanted to use `handlebars` for your `.mustache` based
-templates but it choose to use `hogan.js` instead.
-
-```js
-Pagelet.extend({
-  view: 'sidebar.mustache',
-  engine: 'handlebars'
-}).on(module);
-```
-
-**Please note that the engine needs to be compatible with the [temper] module
-that we use to compile the templates**
-
-### Pagelet: query
-
-_optional:_ **writable, array**
-
-For optimal performance the data that is send to the client will be minimal
-and dependant on they query that is provided. Data can be supplied to the client
-by listing the keys (nested paths in dot notation) of which the data should be
-send to the client. In the example only the content of `mydata` and `nested.is`
-will be send.
-
-```js
-Pagelet.extend({
-  query: [ 'mydata', 'nested.is' ],
-  get: function get(done) {
-    done(null, {
-      mydata: 'test',
-      nested: { is: 'allowed', left: 'alone' },
-      more: 'data'
-    });
-  }
-}).on(module);
-```
-
-### Pagelet: css
-
-_optional:_ **writable, string**
-
-The location of the styling for **only this** pagelet. You should assume that
-you bundle all the CSS that is required to fully render this pagelet. By
-eliminating inherited CSS it will be easier for you to re-use this pagelet on
-other pages as well as in other projects.
-
-```js
-Pagelet.extend({
-  css: './my-little-pony.styl'
-}).on(module);
-```
-
-**Please note that this doesn't have to be a `.css` file as we will
-transparently pre-process these files for you. See the [smithy] project for the
-compatible pre-processors.**
-
-### Pagelet: js
-
-_optional:_ **writable, string**
-
-As you might have guessed, this is the location of the JavaScript that you want
-to have loaded for your pagelet. We use [fortress] to sandbox this JavaScript in
-a dedicated `iframe` so the code you write is not affected and will not affect
-other pagelets on the same page. This also makes it relatively save to extend
-the build-in primitives of JavaScript (adding new properties to Array etc).
-
-Unlike the `view` and `css` we do not pre-process the JavaScript. But this does
-not mean you cannot use CoffeeScript or other pre-processed languages inside a
-Pagelet. It just means that you have to compile your files to a proper
-JavaScript file and point to that location instead.
-
-```js
-Pagelet.extend({
-  js: './library.js'
-}).on(module);
-```
-
-**Please note that the sandboxing is not there as a security feature, it was
-only designed to prevent code from different pagelets clashing with each other**
-
-### Pagelet: dependencies
-
-_optional:_ **writable, array**
-
-An array of dependencies that your pagelet depends on which should be loaded in
-advance and available on the page before any CSS or JavaScript is executed. The
-files listed in this array can either a be CSS or JavaScript resource.
-
-```js
-pagelet.extend({
-  dependencies: [
-    'https://google.com/ga.js'
-  ]
-}).on(module);
-```
-
-### Pagelet: id
+### Pagelet.id
 
 **read only**
 
 The unique id of a given pagelet instance. Please note that this is not a
 persistent id and will differ between every single initialised instance.
 
-### Pagelet: substream
+### Pagelet.substream
 
 **read only**
 
 The pagelet can also be initialised through [Primus] so it can be used for
 real-time communication (and make things like [RPC](#pagelet-rpc) work). The
-communication is done over a [substream] which allows primus multiplex the
+communication is done over a [substream] which allows Primus multiplex the
 connection between various of endpoints.
 
 ## License

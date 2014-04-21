@@ -95,6 +95,20 @@ Pagelet.readable('stringify', function stringify(data, replacer) {
 Pagelet.writable('name', '');
 
 /**
+ * When enabled we will stream the submit of each form that is within a Pagelet
+ * to the server instead of using the default full page refreshes. After sending
+ * the data the resulting HTML will be used to only update the contents of the
+ * pagelet.
+ *
+ * If you want to opt-out of this with one form you can add
+ * a `data-pagelet-async="false"` attribute to the form element.
+ *
+ * @type {Boolean}
+ * @public
+ */
+Pagelet.writable('streaming', false);
+
+/**
  * These methods can be remotely called from the client. Please note that they
  * are not set to the client, it will merely be executing on the server side.
  *
