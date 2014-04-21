@@ -333,6 +333,7 @@ Pagelet.readable('render', function render(options, fn) {
   data.rpc = data.rpc || this.RPC;                      // RPC methods.
   data.remove = authorized ? false : this.remove;       // Remove from DOM.
   data.authorized = authorized;                         // Pagelet was authorized.
+  data.streaming = !!this.streaming;                    // Submit streaming.
 
   /**
    * Write the fragmented data.
