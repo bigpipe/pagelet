@@ -33,7 +33,7 @@ function Pagelet() {
   // Add an correctly namespaced debug method so it easier to see which pagelet
   // is called by just checking the name of it.
   //
-  this.readable('debug', debug('bigpipe:pagelet:'+ this.name));
+  this.readable('debug', debug('pagelet:'+ this.name));
 
   this.configure();
 }
@@ -454,7 +454,7 @@ Pagelet.readable('connect', function connect(spark, next) {
     if (!authorized) return next(new Error('Unauthorized to access this pagelet'));
 
     var stream = pagelet.substream = spark.substream(pagelet.name)
-      , log = debug('pagelet::primus::'+ pagelet.name);
+      , log = debug('pagelet:primus:'+ pagelet.name);
 
     log('created a new substream');
 
