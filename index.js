@@ -1,10 +1,10 @@
 'use strict';
 
-var debug = require('debug')('bigpipe:pagelet')
-  , jstringify = require('json-stringify-safe')
+var jstringify = require('json-stringify-safe')
   , FreeList = require('freelist').FreeList
   , dot = require('dot-component')
   , Temper = require('temper')
+  , debug = require('debug')
   , fuse = require('fusing')
   , path = require('path');
 
@@ -33,7 +33,7 @@ function Pagelet() {
   // Add an correctly namespaced debug method so it easier to see which pagelet
   // is called by just checking the name of it.
   //
-  this.readable('debug', require('debug')('bigpipe:pagelet:'+ this.name));
+  this.readable('debug', debug('bigpipe:pagelet:'+ this.name));
 
   this.configure();
 }
@@ -226,7 +226,7 @@ Pagelet.writable('query', []);
  * 2. Your view throws an error when rendering the template.
  *
  * If no view has been set it will default to the Pagelet's default error
- * template which outputs a small HTML fragrment that states the error.
+ * template which outputs a small HTML fragment that states the error.
  *
  * @type {String}
  * @public
@@ -452,10 +452,20 @@ Pagelet.readable('connect', function connect(spark, next) {
   function substream(authorized) {
     if (!authorized) return next(new Error('Unauthorized to access this pagelet'));
 
-    var stream = pagelet.substream = spark.substream(pagelet.name);
+    var stream = pagelet.substream = spark.substream(pagelet.name)
+      , log = debug('pagelet::primus::'+ pagelet.name);
 
-    stream.once('end', pagelet.emits('end'));
+    log('created a new substream');
+
+    stream.once('end', pagelet.emits('end', function (arg) {
+      log('closing substream');
+
+      return arg;
+    }));
+
     stream.on('data', function streamed(data) {
+      log('incoming packet %s', data.type);
+
       switch (data.type) {
         case 'rpc':
           pagelet.call(data);
@@ -484,6 +494,10 @@ Pagelet.readable('connect', function connect(spark, next) {
               stream.write({ type: 'fragment', frag: fragment, err: err });
             });
           });
+        break;
+
+        default:
+          log('unknown packet type %s, ignoring packet', data.type);
         break;
       }
     });
@@ -583,6 +597,7 @@ Pagelet.on = function on(module) {
  */
 Pagelet.optimize = function optimize(hook) {
   var Pagelet = this
+    , log = debug('bigpipe:pagelet')
     , prototype = Pagelet.prototype
     , dir = prototype.directory;
 
@@ -592,7 +607,7 @@ Pagelet.optimize = function optimize(hook) {
   //
   if (Pagelet.properties) return Pagelet;
 
-  debug('Optimizing pagelet %s for FreeList', prototype.name);
+  log('Optimizing pagelet %s for FreeList', prototype.name);
   if (prototype.view) {
     prototype.view = path.resolve(dir, prototype.view);
     temper.prefetch(prototype.view, prototype.engine);
