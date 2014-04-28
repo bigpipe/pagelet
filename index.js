@@ -47,8 +47,6 @@ fuse(Pagelet, require('stream'));
  * @api private
  */
 Pagelet.readable('configure', function configure() {
-  this.debug('configuring %s/%s', this.name, this.id);
-
   //
   // Set a new id.
   //
@@ -62,6 +60,7 @@ Pagelet.readable('configure', function configure() {
   if (this.substream) this.substream.end();
   this.substream = this._authorized = null;
 
+  this.debug('configuring %s/%s', this.name, this.id);
   return this.removeAllListeners();
 });
 
