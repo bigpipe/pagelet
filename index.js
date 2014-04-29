@@ -243,21 +243,22 @@ Pagelet.writable('error', '');
 Pagelet.writable('engine', '');
 
 /**
- * The location of the Style Sheet for this pagelet. It should contain all the
- * CSS that's needed to render this pagelet. It doesn't have to be a `CSS`
- * extension as these files are passed through `smithy` for automatic
- * pre-processing.
+ * The Style Sheet for this pagelet. The location can be a string or multiple paths
+ * in an array. It should contain all the CSS that's needed to render this pagelet.
+ * It doesn't have to be a `CSS` extension as these files are passed through
+ * `smithy` for automatic pre-processing.
  *
- * @type {String}
+ * @type {String|Array}
  * @public
  */
 Pagelet.writable('css', '');
 
 /**
- * The location of the JavaScript file that you need for this page. This file
- * needs to be included in order for this pagelet to function.
+ * The JavaScript files needed for this page. The location can be a string or
+ * multiple paths in an array. This file needs to be included in order for
+ * this pagelet to function.
  *
- * @type {String}
+ * @type {String|Array}
  * @public
  */
 Pagelet.writable('js', '');
@@ -625,8 +626,19 @@ Pagelet.optimize = function optimize(hook) {
     temper.prefetch(prototype.error, '');
   }
 
-  if (prototype.css) prototype.css = path.resolve(dir, prototype.css);
-  if (prototype.js) prototype.js = path.resolve(dir, prototype.js);
+  if (prototype.css) {
+    prototype.css = Array.isArray(prototype.css) ? prototype.css : [prototype.css];
+    Pagelet.prototype.css = prototype.css.map(function resolveCSS(css) {
+      return path.resolve(dir, css);
+    });
+  }
+
+  if (prototype.js) {
+    prototype.js = Array.isArray(prototype.js) ? prototype.js : [prototype.js];
+    Pagelet.prototype.js = prototype.js.map(function resolveJS(js) {
+      return path.resolve(dir, js);
+    });
+  }
 
   //
   // Make sure that all our dependencies are also directly mapped to an
