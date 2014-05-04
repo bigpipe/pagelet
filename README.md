@@ -27,7 +27,9 @@ var Pagelet = require('bigpipe').Pagelet;
 
 **Pagelet instance**
 - [Pagelet.name](#pageletname)
+- [Pagelet.streaming](#pageletstreaming)
 - [Pagelet.RPC](#pageletrpc)
+- [Pagelet.mode](#pageletmode)
 - [Pagelet.fragment](#pageletfragment)
 - [Pagelet.remove](#pageletremove)
 - [Pagelet.view](#pageletview)
@@ -147,6 +149,22 @@ Pagelet.extend({
   methodname: function methodname(reply, arg1, arg2) {
 
   }
+}).on(module);
+```
+
+### Pagelet.mode
+
+_optional:_ **writable, string**
+
+Set the render mode the pagelet fragment. This will determine which client side
+method will be called to create elements. For instance, this mode can be changed
+to `svg` to generate SVG elements with the SVG namespaceURI.
+
+**Default value**: `html`
+
+```js
+Pagelet.extend({
+  mode: 'svg',
 }).on(module);
 ```
 
