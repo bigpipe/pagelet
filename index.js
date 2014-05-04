@@ -130,6 +130,15 @@ Pagelet.writable('streaming', false);
 Pagelet.writable('RPC', []);
 
 /**
+ * Specify a mode that should be used for node client side rendering, this defaults
+ * to HTML. For instance to allow a pagelet to generate SVG elements use mode svg.
+ *
+ * @type {String}
+ * @public
+ */
+Pagelet.writable('mode', 'html');
+
+/**
  * An authorization handler to see if the request is authorized to interact with
  * this pagelet. This is set to `null` by default as there isn't any
  * authorization in place. The authorization function will receive 2 arguments:
@@ -330,6 +339,7 @@ Pagelet.readable('render', function render(options, fn) {
     , pagelet = this;
 
   data.id = data.id || this.id;                         // Pagelet id.
+  data.mode = data.mode || this.mode;                   // Pagelet render mode.
   data.rpc = data.rpc || this.RPC;                      // RPC methods.
   data.remove = authorized ? false : this.remove;       // Remove from DOM.
   data.authorized = authorized;                         // Pagelet was authorized.
