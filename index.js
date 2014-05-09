@@ -240,7 +240,7 @@ Pagelet.writable('query', []);
  * @type {String}
  * @public
  */
-Pagelet.writable('error', '');
+Pagelet.writable('error', path.join(__dirname, 'error.ejs'));
 
 /**
  * Optional template engine preference. Useful when we detect the wrong template
