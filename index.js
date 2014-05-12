@@ -177,7 +177,7 @@ Pagelet.writable('authorized', {
 }, true);
 
 /**
- * A pagelet has been initialised.
+ * A pagelet has been initialized.
  *
  * @type {Function}
  * @public
@@ -370,9 +370,9 @@ Pagelet.readable('render', function render(options, fn) {
     });
 
     fn.call(context, undefined, pagelet.fragment
-      .replace(/\{pagelet::name\}/g, pagelet.name)
-      .replace(/\{pagelet::template\}/g, content.replace(/<!--(.|\s)*?-->/, ''))
-      .replace(/\{pagelet::data\}/g, data)
+      .replace(/\{pagelet:name\}/g, pagelet.name)
+      .replace(/\{pagelet:template\}/g, content.replace(/<!--(.|\s)*?-->/, ''))
+      .replace(/\{pagelet:data\}/g, data)
     );
 
     return pagelet;
@@ -661,21 +661,8 @@ Pagelet.optimize = function optimize(hook) {
     });
   }
 
-  //
-  // Aliasing, some methods can be written with different names or American
-  // vs Britain vs old English. For example `initialise` vs `initialize` but
-  // also the use of CAPS like `RPC` vs `rpc`
-  //
-  if (Array.isArray(prototype.rpc) && !prototype.RPC.length) {
-    prototype.RPC = prototype.rpc;
-  }
-
   if ('string' === typeof prototype.RPC) {
     prototype.RPC= prototype.RPC.split(/[\s|\,]/);
-  }
-
-  if ('function' === typeof prototype.initialise) {
-    prototype.initialize = prototype.initialise;
   }
 
   //
