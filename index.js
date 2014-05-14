@@ -498,10 +498,10 @@ Pagelet.readable('connect', function connect(spark, next) {
             return stream.write({ type: data.type, err: new Error('Method not supported by pagelet') });
           }
 
-          pagelet[data.type](data.body || {}, data.files || [], function processed(err, data) {
+          pagelet[data.type](data.body || {}, data.files || [], function processed(err, context) {
             if (err) return stream.write({ type: data.type, err: err });
 
-            pagelet.render({ data: data, substream: true }, function rendered(err, fragment) {
+            pagelet.render({ data: context, substream: true }, function rendered(err, fragment) {
               stream.write({ type: 'fragment', frag: fragment, err: err });
             });
           });
