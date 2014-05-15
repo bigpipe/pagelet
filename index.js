@@ -353,7 +353,7 @@ Pagelet.readable('render', function render(options, fn) {
    * @api private
    */
   function fragment(content) {
-    if (options.substream) {
+    if (options.substream || pagelet.page && pagelet.page.mode === 'sync') {
       data.view = content;
       return fn.call(context, undefined, data);
     }
