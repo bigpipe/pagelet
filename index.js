@@ -240,7 +240,7 @@ Pagelet.writable('query', []);
  * @type {String}
  * @public
  */
-Pagelet.writable('error', path.join(__dirname, 'error.ejs'));
+Pagelet.writable('error', path.join(__dirname, 'error.html'));
 
 /**
  * Optional template engine preference. Useful when we detect the wrong template
@@ -632,7 +632,7 @@ Pagelet.optimize = function optimize(hook) {
     prototype.error = path.resolve(dir, prototype.error);
     temper.prefetch(prototype.error, prototype.engine);
   } else {
-    prototype.error = path.resolve(__dirname, 'error.ejs');
+    prototype.error = path.resolve(__dirname, 'error.html');
     temper.prefetch(prototype.error, '');
   }
 
