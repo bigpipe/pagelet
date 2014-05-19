@@ -661,6 +661,14 @@ Pagelet.optimize = function optimize(hook) {
     });
   }
 
+  //
+  // Support lowercase variant of RPC
+  //
+  if ('rpc' in prototype) {
+    prototype.RPC = prototype.rpc;
+    delete prototype.rpc;
+  }
+
   if ('string' === typeof prototype.RPC) {
     prototype.RPC= prototype.RPC.split(/[\s|\,]/);
   }
