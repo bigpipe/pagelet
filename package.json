@@ -29,7 +29,7 @@
     "temper": "0.2.x"
   },
   "devDependencies": {
-    "chai": "1.9.x",
+    "assume": "0.0.x",
     "coveralls": "2.8.x",
     "istanbul": "0.2.x",
     "mocha": "1.19.x",
