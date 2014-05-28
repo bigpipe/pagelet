@@ -719,6 +719,14 @@ Pagelet.optimize = function optimize(hook) {
   }
 
   //
+  // Add a private .free method which releases the given instance back in to the
+  // pool.
+  //
+  Pagelet.readable('free', function free() {
+    Pagelet.freelist.free(this);
+  });
+
+  //
   // Allow plugins to hook in the transformation process, so emit it when
   // all our transformations are done and before we create a copy of the
   // "fixed" properties which later can be re-used again to restore
@@ -731,20 +739,9 @@ Pagelet.optimize = function optimize(hook) {
   // Setup a FreeList for the pagelets so we can re-use the pagelet
   // instances and reduce garbage collection.
   //
-  Pagelet.freelist = new FreeList(
-    'pagelet',
-    prototype.freelist || 1000,
-    function allocate() {
-      var pagelet = new Pagelet();
-
-      pagelet.once('free', function free() {
-        Pagelet.freelist.free(pagelet);
-        pagelet = null;
-      });
-
-      return pagelet;
-    }
-  );
+  Pagelet.freelist = new FreeList('pagelet', prototype.freelist || 1000, function allocate() {
+    return new Pagelet();
+  });
 
   return Pagelet;
 };
