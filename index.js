@@ -3,10 +3,16 @@
 var jstringify = require('json-stringify-safe')
   , FreeList = require('freelist').FreeList
   , dot = require('dot-component')
+  , Stream = require('stream')
   , Temper = require('temper')
   , debug = require('debug')
   , fuse = require('fusing')
   , path = require('path');
+
+//
+// Cache long prototype lookups to increase speed + write shorter code.
+//
+var slice = Array.prototype.slice;
 
 //
 // Create singletonian temper usable for constructed pagelets. This will ensure
@@ -38,7 +44,7 @@ function Pagelet() {
   this.configure();
 }
 
-fuse(Pagelet, require('stream'));
+fuse(Pagelet, Stream, { emits: false });
 
 /**
  * Reset the instance to it's original state.
@@ -483,7 +489,7 @@ Pagelet.readable('connect', function connect(spark, next) {
         break;
 
         case 'emit':
-          pagelet.emit.apply(pagelet, [data.name].concat(data.args));
+          Stream.prototype.emit.apply(pagelet, [data.name].concat(data.args));
         break;
 
         case 'get':
@@ -522,6 +528,45 @@ Pagelet.readable('connect', function connect(spark, next) {
 
   return this;
 });
+
+/**
+ * Simple emit wrapper that returns a function that emits an event once it's
+ * called
+ *
+ * ```js
+ * example.on('close', example.emits('close'));
+ * ```
+ *
+ * @param {String} event Name of the event that we should emit.
+ * @param {Function} parser The last argument, if it's a function is a arg parser
+ * @api public
+ */
+Pagelet.prototype.emits = function emits() {
+  var args = slice.call(arguments, 0)
+    , self = this
+    , parser;
+
+  //
+  // Assume that if the last given argument is a function, it would be
+  // a parser.
+  //
+  if ('function' === typeof args[args.length - 1]) {
+    parser = args.pop();
+  }
+
+  return function emit(arg) {
+    if (!self.listeners(args[0]).length) return false;
+
+    if (parser) {
+      arg = parser.apply(self, arguments);
+      if (!Array.isArray(arg)) arg = [arg];
+    } else {
+      arg = slice.call(arguments, 0);
+    }
+
+    return Stream.prototype.emit.apply(self, args.concat(arg));
+  };
+};
 
 /**
  * Authenticate the Pagelet.
@@ -570,7 +615,7 @@ Pagelet.readable('call', function calls(data) {
   //
   fn.apply(pagelet, [function reply() {
     pagelet.substream.write({
-      args: Array.prototype.slice.call(arguments, 0),
+      args: slice.call(arguments, 0),
       type: 'rpc',
       id: data.id
     });
