@@ -2,10 +2,10 @@
 
 var jstringify = require('json-stringify-safe')
   , FreeList = require('freelist').FreeList
+  , debug = require('diagnostics')
   , dot = require('dot-component')
   , Stream = require('stream')
   , Temper = require('temper')
-  , debug = require('debug')
   , fuse = require('fusing')
   , path = require('path');
 

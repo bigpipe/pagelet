@@ -22,7 +22,7 @@
   },
   "homepage": "http://bigpipe.io",
   "dependencies": {
-    "debug": "0.8.x",
+    "diagnostics": "0.0.x",
     "dot-component": "0.1.x",
     "fusing": "0.2.x",
     "json-stringify-safe": "5.0.x",
