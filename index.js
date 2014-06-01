@@ -2,6 +2,7 @@
 
 var jstringify = require('json-stringify-safe')
   , FreeList = require('freelist').FreeList
+  , fabricate = require('fabricator')
   , debug = require('diagnostics')
   , dot = require('dot-component')
   , Stream = require('stream')
@@ -715,7 +716,7 @@ Pagelet.optimize = function optimize(hook) {
   }
 
   if ('string' === typeof prototype.RPC) {
-    prototype.RPC= prototype.RPC.split(/[\s|\,]/);
+    prototype.RPC = prototype.RPC.split(/[\s|\,]/);
   }
 
   //
@@ -744,6 +745,18 @@ Pagelet.optimize = function optimize(hook) {
   });
 
   return Pagelet;
+};
+
+Pagelet.traverse = function traverse() {
+  var pagelets = this.prototype.pagelets;
+  if (!pagelets) return [ this ];
+
+  pagelets = fabricate(pagelets);
+  pagelets.forEach(function each(Pagelet) {
+    pagelets.concat(Pagelet.traverse());
+  });
+
+  return pagelets;
 };
 
 //
