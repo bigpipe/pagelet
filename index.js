@@ -747,9 +747,16 @@ Pagelet.optimize = function optimize(hook) {
   return Pagelet;
 };
 
+/**
+ * Discover all pagelets recursive. Fabricate will create constructable instances
+ * from the provided value of prototype.pagelets.
+ *
+ * @return {Array} collection of pagelets instances.
+ * @api public
+ */
 Pagelet.traverse = function traverse() {
   var pagelets = this.prototype.pagelets;
-  if (!pagelets) return [ this ];
+  if (!pagelets) return [this];
 
   pagelets = fabricate(pagelets);
   pagelets.forEach(function each(Pagelet) {

@@ -68,4 +68,10 @@ describe('Pagelet', function () {
     it('stores all introduced properties as array');
     it('adds a freelist factory');
   });
+
+  describe('.traverse', function () {
+    it('returns an array');
+    it('will return the pagelet');
+    it('does recursive pagelet discovery');
+  });
 });
