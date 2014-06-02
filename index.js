@@ -763,7 +763,7 @@ Pagelet.traverse = function traverse() {
     pagelets.concat(Pagelet.traverse());
   });
 
-  return pagelets;
+  return pagelets.concat(this);
 };
 
 //
