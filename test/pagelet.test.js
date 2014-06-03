@@ -73,5 +73,6 @@ describe('Pagelet', function () {
     it('returns an array');
     it('will return the pagelet');
     it('does recursive pagelet discovery');
+    it('sets the pagelets parent name on `_parent`');
   });
 });
