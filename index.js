@@ -351,6 +351,8 @@ Pagelet.readable('render', function render(options, fn) {
   data.remove = authorized ? false : this.remove;       // Remove from DOM.
   data.authorized = authorized;                         // Pagelet was authorized.
   data.streaming = !!this.streaming;                    // Submit streaming.
+  console.log(pagelet._parent);
+  data.parent = pagelet._parent;                        // Send parent name along.
 
   /**
    * Write the fragmented data.
@@ -754,16 +756,22 @@ Pagelet.optimize = function optimize(hook) {
  * @return {Array} collection of pagelets instances.
  * @api public
  */
-Pagelet.traverse = function traverse() {
-  var pagelets = this.prototype.pagelets;
-  if (!pagelets) return [this];
+Pagelet.traverse = function traverse(parent) {
+  var pagelets = this.prototype.pagelets
+    , log = debug('bigpipe:pagelet')
+    , found = [this];
+
+  if (!pagelets) return found;
 
   pagelets = fabricate(pagelets);
   pagelets.forEach(function each(Pagelet) {
-    pagelets.concat(Pagelet.traverse());
+    log('Recursive discovery of child pagelets from %s', parent);
+
+    Pagelet.prototype._parent = parent;
+    found = found.concat(Pagelet.traverse(Pagelet.prototype.name));
   });
 
-  return pagelets.concat(this);
+  return found;
 };
 
 //
