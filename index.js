@@ -41,7 +41,6 @@ function Pagelet() {
   // is called by just checking the name of it.
   //
   this.readable('debug', debug('pagelet:'+ this.name));
-  this.configure();
 }
 
 fuse(Pagelet, Stream, { emits: false });
