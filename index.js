@@ -326,7 +326,6 @@ Pagelet.readable('render', function render(options, fn) {
   data.remove = authorized ? false : this.remove;       // Remove from DOM.
   data.authorized = authorized;                         // Pagelet was authorized.
   data.streaming = !!this.streaming;                    // Submit streaming.
-  console.log(pagelet._parent);
   data.parent = pagelet._parent;                        // Send parent name along.
 
   /**
