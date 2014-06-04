@@ -1,7 +1,6 @@
 'use strict';
 
 var jstringify = require('json-stringify-safe')
-  , FreeList = require('freelist').FreeList
   , fabricate = require('fabricator')
   , debug = require('diagnostics')
   , dot = require('dot-component')
@@ -34,42 +33,18 @@ function Pagelet() {
   this.writable('_authorized', null);                     // Are we authorized
   this.writable('substream', null);                       // Substream from Primus.
   this.readable('temper', temper);                        // Template parser.
-  this.writable('id', null);                              // Custom ID of the pagelet.
+  this.writable('id', [1, 1, 1, 1].map(function generator() {
+    return Math.random().toString(36).substring(2).toUpperCase();
+  }).join('-'));
 
   //
   // Add an correctly namespaced debug method so it easier to see which pagelet
   // is called by just checking the name of it.
   //
   this.readable('debug', debug('pagelet:'+ this.name));
-
-  this.configure();
 }
 
 fuse(Pagelet, Stream, { emits: false });
-
-/**
- * Reset the instance to it's original state.
- *
- * @returns {Pagelet}
- * @api private
- */
-Pagelet.readable('configure', function configure() {
-  //
-  // Set a new id.
-  //
-  this.id = [1, 1, 1, 1].map(function generator() {
-    return Math.random().toString(36).substring(2).toUpperCase();
-  }).join('-');
-
-  //
-  // Clean up possible old references.
-  //
-  if (this.substream) this.substream.end();
-  this.substream = this._authorized = null;
-
-  this.debug('configuring %s/%s', this.name, this.id);
-  return this.removeAllListeners();
-});
 
 /**
  * A safe and fast `JSON.stringify`.
@@ -666,7 +641,6 @@ Pagelet.optimize = function optimize(hook) {
   //
   if (Pagelet.properties) return Pagelet;
 
-  log('Optimizing pagelet %s for FreeList', prototype.name);
   if (prototype.view) {
     prototype.view = path.resolve(dir, prototype.view);
     temper.prefetch(prototype.view, prototype.engine);
@@ -722,29 +696,12 @@ Pagelet.optimize = function optimize(hook) {
   }
 
   //
-  // Add a private .free method which releases the given instance back in to the
-  // pool.
-  //
-  Pagelet.readable('free', function free() {
-    Pagelet.freelist.free(this);
-  });
-
-  //
   // Allow plugins to hook in the transformation process, so emit it when
   // all our transformations are done and before we create a copy of the
   // "fixed" properties which later can be re-used again to restore
   // a generated instance to it's original state.
   //
   if ('function' === typeof hook) hook(Pagelet);
-  Pagelet.properties = Object.keys(Pagelet.prototype);
-
-  //
-  // Setup a FreeList for the pagelets so we can re-use the pagelet
-  // instances and reduce garbage collection.
-  //
-  Pagelet.freelist = new FreeList('pagelet', prototype.freelist || 1000, function allocate() {
-    return new Pagelet();
-  });
 
   return Pagelet;
 };
