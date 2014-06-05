@@ -1,6 +1,7 @@
 'use strict';
 
 var jstringify = require('json-stringify-safe')
+  , fabricate = require('fabricator')
   , debug = require('diagnostics')
   , dot = require('dot-component')
   , Stream = require('stream')
@@ -325,6 +326,7 @@ Pagelet.readable('render', function render(options, fn) {
   data.remove = authorized ? false : this.remove;       // Remove from DOM.
   data.authorized = authorized;                         // Pagelet was authorized.
   data.streaming = !!this.streaming;                    // Submit streaming.
+  data.parent = pagelet._parent;                        // Send parent name along.
 
   /**
    * Write the fragmented data.
@@ -689,7 +691,7 @@ Pagelet.optimize = function optimize(hook) {
   }
 
   if ('string' === typeof prototype.RPC) {
-    prototype.RPC= prototype.RPC.split(/[\s|\,]/);
+    prototype.RPC = prototype.RPC.split(/[\s|\,]/);
   }
 
   //
@@ -701,6 +703,31 @@ Pagelet.optimize = function optimize(hook) {
   if ('function' === typeof hook) hook(Pagelet);
 
   return Pagelet;
+};
+
+/**
+ * Discover all pagelets recursive. Fabricate will create constructable instances
+ * from the provided value of prototype.pagelets.
+ *
+ * @return {Array} collection of pagelets instances.
+ * @api public
+ */
+Pagelet.traverse = function traverse(parent) {
+  var pagelets = this.prototype.pagelets
+    , log = debug('bigpipe:pagelet')
+    , found = [this];
+
+  if (!pagelets) return found;
+
+  pagelets = fabricate(pagelets);
+  pagelets.forEach(function each(Pagelet) {
+    log('Recursive discovery of child pagelets from %s', parent);
+
+    Pagelet.prototype._parent = parent;
+    found = found.concat(Pagelet.traverse(Pagelet.prototype.name));
+  });
+
+  return found;
 };
 
 //
