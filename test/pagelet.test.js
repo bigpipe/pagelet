@@ -70,9 +70,65 @@ describe('Pagelet', function () {
   });
 
   describe('.traverse', function () {
-    it('returns an array');
-    it('will return the pagelet');
-    it('does recursive pagelet discovery');
-    it('sets the pagelets parent name on `_parent`');
+    it('is a function', function () {
+      assume(Pagelet.traverse).to.be.a('function');
+      assume(P.traverse).to.be.a('function');
+      assume(Pagelet.traverse).to.equal(P.traverse);
+    });
+
+    it('returns an array', function () {
+      var one = P.traverse()
+        , recur = P.extend({
+            pagelets: {
+              child: P.extend({ name: 'child' })
+            }
+          }).traverse('this one');
+
+      assume(one).to.be.an('array');
+      assume(one.length).to.equal(1);
+
+      assume(recur).to.be.an('array');
+      assume(recur.length).to.equal(2);
+    });
+
+    it('will at least return the pagelet', function () {
+      var single = P.traverse();
+
+      assume(single[0].prototype._parent).to.equal(undefined);
+      assume(single[0].prototype.directory).to.equal(__dirname);
+      assume(single[0].prototype.view).to.equal('fixtures/view.html');
+    });
+
+    it('does recursive pagelet discovery', function () {
+      var recur = P.extend({
+        pagelets: {
+          child: P.extend({
+            name: 'child' ,
+            pagelets: {
+              another: P.extend({ name: 'another' })
+            }
+          }),
+        }
+      }).traverse('multiple');
+
+      assume(recur).is.an('array');
+      assume(recur.length).to.equal(3);
+
+      assume(recur[1].prototype.name).to.equal('child');
+      assume(recur[2].prototype.name).to.equal('another');
+    });
+
+    it('sets the pagelets parent name on `_parent`', function () {
+      var recur = P.extend({
+        pagelets: {
+          child: P.extend({
+            name: 'child'
+          })
+        }
+      }).traverse('parental');
+
+      assume(recur[0].prototype._parent).to.equal(undefined);
+      assume(recur[1].prototype._parent).to.equal('parental');
+    });
   });
 });
