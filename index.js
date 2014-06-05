@@ -723,7 +723,7 @@ Pagelet.traverse = function traverse(parent) {
   pagelets.forEach(function each(Pagelet) {
     log('Recursive discovery of child pagelets from %s', parent);
 
-    Pagelet.prototype._parent = parent;
+    Pagelet.readable('_parent', parent);
     found = found.concat(Pagelet.traverse(Pagelet.prototype.name));
   });
 
