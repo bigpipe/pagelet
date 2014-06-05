@@ -24,7 +24,7 @@
   "dependencies": {
     "diagnostics": "0.0.x",
     "dot-component": "0.1.x",
-    "fabricator": "0.3.x",
+    "fabricator": "0.4.x",
     "fusing": "0.2.x",
     "json-stringify-safe": "5.0.x",
     "temper": "0.2.x"

@@ -719,7 +719,7 @@ Pagelet.traverse = function traverse(parent) {
 
   if (!pagelets) return found;
 
-  pagelets = fabricate(pagelets);
+  pagelets = fabricate(pagelets, { recursive: false });
   pagelets.forEach(function each(Pagelet) {
     log('Recursive discovery of child pagelets from %s', parent);
 
