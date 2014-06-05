@@ -24,6 +24,7 @@ var Pagelet = require('bigpipe').Pagelet;
 **Pagelet function**
 - [Pagelet.extend](#pageletextend)
 - [Pagelet.on](#pageleton)
+- [Pagelet.traverse](#pagelettraverse)
 
 **Pagelet instance**
 - [Pagelet.name](#pageletname)
@@ -42,8 +43,10 @@ var Pagelet = require('bigpipe').Pagelet;
 - [Pagelet.get()](#pageletget)
 - [Pagelet.authorize()](#pageletauthorize)
 - [Pagelet.initialize()](#pageletinitialize)
+- [Pagelet.pagelets](#pageletpagelets)
 - [Pagelet.id](#pageletid)
 - [Pagelet.substream](#pageletsubstream)
+- [Pagelet._parent](#pageletparent)
 
 ### Pagelet.extend
 
@@ -81,6 +84,23 @@ Pagelet.extend({
 
 This has the added benefit of no longer needing to do `module.exports = ..` in
 your code as the `Pagelet.on` method automatically does this for you.
+
+### Pagelet.traverse
+
+Recusively find and construct all pagelets. Uses the
+[pagelets property](#pageletpagelets) to find additional child pagelets. Usually
+there is no need to call this manually. [BigPipe] will make sure all pagelets
+are recursively discovered. Traverse should be called with the name of the
+parent pagelet, so each child has a proper reference.
+
+```
+Pagelet.extend({
+  pagelets: {
+    one: require('pagelet'),
+    two: require('pagelet')
+  }
+}).traverse('parent name');
+```
 
 ### Pagelet.name
 
@@ -395,6 +415,25 @@ Pagelet.extend({
 });
 ```
 
+### Pagelet.pagelets
+
+_optional:_ **writable, string|array|object**
+
+Each pagelet can contain `n` child pagelets. Similar to using pagelets through
+[BigPipe], the pagelets property can be a string (filepath to file or directory),
+array or object containing multiple pagelets. All subsequent child pagelets will
+be converged on one stack to allow full parallel initialization. The client will
+handle deferred rendering of child pagelets, also see [_parent](#pageletparent).
+
+```
+Pagelet.extend({
+  pagelets: {
+    one: require('pagelet'),
+    two: require('pagelet')
+  }
+});
+```
+
 ### Pagelet.id
 
 **read only**
@@ -410,6 +449,14 @@ The pagelet can also be initialised through [Primus] so it can be used for
 real-time communication (and make things like [RPC](#pagelet-rpc) work). The
 communication is done over a [substream] which allows Primus multiplex the
 connection between various of endpoints.
+
+### Pagelet._parent
+
+**read only**
+
+If the current pagelet is intialized from another pagelet, it will have a `_parent`
+reference. The pagelets' parent name will be stored so that client-side
+initialization is deferred till the parent is rendered.
 
 ## License
 
