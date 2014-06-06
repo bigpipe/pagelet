@@ -500,10 +500,7 @@ Pagelet.readable('connect', function connect(spark, next) {
     return pagelet;
   }
 
-  if ('function' !== this.authorize) return substream(true);
-  this.authorize(spark.request, substream);
-
-  return this;
+  return this.authenticate(spark.request, substream);
 });
 
 /**
