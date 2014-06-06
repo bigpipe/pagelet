@@ -25,16 +25,19 @@
     "diagnostics": "0.0.x",
     "dot-component": "0.1.x",
     "fabricator": "0.4.x",
-    "fusing": "0.2.x",
+    "fusing": "0.3.x",
     "json-stringify-safe": "5.0.x",
     "temper": "0.2.x"
   },
   "devDependencies": {
     "assume": "0.0.x",
-    "coveralls": "2.8.x",
+    "coveralls": "2.10.x",
     "istanbul": "0.2.x",
-    "mocha": "1.19.x",
+    "mocha": "1.20.x",
     "mocha-lcov-reporter": "0.0.x",
-    "pre-commit": "0.0.x"
+    "pre-commit": "0.0.x",
+    "primus": "2.3.x",
+    "substream": "0.1.x",
+    "ws": "0.4.x"
   }
 }
