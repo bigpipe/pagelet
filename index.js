@@ -391,7 +391,7 @@ Pagelet.readable('render', function render(options, fn) {
         throw err; // Throw so we can capture it again.
       }
 
-      content = view(result);
+      content = view(result || {});
     } catch (e) {
       //
       // This is basically fly or die, if the supplied error template throws an
