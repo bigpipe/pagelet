@@ -317,6 +317,7 @@ Pagelet.readable('render', function render(options, fn) {
   var context = options.context || this
     , authorized = this.authorized
     , data = options.data || {}
+    , temper = this.temper
     , query = this.query
     , pagelet = this;
 
@@ -327,6 +328,7 @@ Pagelet.readable('render', function render(options, fn) {
   data.authorized = authorized;                         // Pagelet was authorized.
   data.streaming = !!this.streaming;                    // Submit streaming.
   data.parent = pagelet._parent;                        // Send parent name along.
+  data.md5 = temper.fetch(pagelet.view).hash.client;    // MD5 hash of client.
 
   /**
    * Write the fragmented data.
@@ -372,7 +374,7 @@ Pagelet.readable('render', function render(options, fn) {
   // which `after` can be called in proper context.
   //
   pagelet.get(function receive(err, result) {
-    var view = pagelet.temper.fetch(pagelet.view).server
+    var view = temper.fetch(pagelet.view).server
       , content;
 
     //
@@ -400,7 +402,7 @@ Pagelet.readable('render', function render(options, fn) {
       //
       if (!pagelet.error) return fn(e);
 
-      content = pagelet.temper.fetch(pagelet.error).server(pagelet.merge(result, {
+      content = temper.fetch(pagelet.error).server(pagelet.merge(result, {
         reason: 'Failed to render: '+ pagelet.name,
         env: process.env.NODE_ENV || 'development',
         message: e.message,
