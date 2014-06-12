@@ -601,17 +601,23 @@ Pagelet.readable('call', function calls(data) {
 /**
  * Helper function to resolve assets on the pagelet.
  *
- * @param {String} key Name of the property, e.g. css, js.
+ * @param {String|Array} keys Name(s) of the property, e.g. [css, js].
  * @param {String} dir Optional absolute directory to resolve from.
+ * @returns {Pagelet}
  * @api public
  */
-Pagelet.resolve = function resolve(key, dir) {
-  var prototype = this.prototype
-    , stack = Array.isArray(prototype[key]) ? prototype[key] : [prototype[key]];
+Pagelet.resolve = function resolve(keys, dir) {
+  var prototype = this.prototype;
 
-  prototype[key] = stack.map(function map(file) {
-    if (/^(http:|https:)?\/\//.test(file)) return file;
-    return path.resolve(dir || prototype.directory, file);
+  keys = Array.isArray(keys) ? keys : [keys];
+  keys.forEach(function each(key) {
+    if (!prototype[key]) return;
+
+    var stack = Array.isArray(prototype[key]) ? prototype[key] : [prototype[key]];
+    prototype[key] = stack.map(function map(file) {
+      if (/^(http:|https:)?\/\//.test(file)) return file;
+      return path.resolve(dir || prototype.directory, file);
+    });
   });
 
   return this;
@@ -643,9 +649,7 @@ Pagelet.on = function on(module) {
   // Map all dependencies to an absolute path or URL.
   //
   if (prototype.view) prototype.view = path.resolve(dir, prototype.view);
-  if (prototype.css) this.resolve.call(this, 'css', dir);
-  if (prototype.js) this.resolve.call(this,'js', dir);
-  if (prototype.dependencies) this.resolve.call(this, 'dependencies', dir);
+  this.resolve(['css', 'js', 'dependencies']);
 
   return module.exports = this;
 };
@@ -663,12 +667,9 @@ Pagelet.optimize = function optimize(hook) {
 
   //
   // Prefetch the template if a view is available.
-  //
-  if (prototype.view) temper.prefetch(prototype.view, prototype.engine);
-
-  //
   // Ensure we have a custom error page when we fail to render this fragment.
   //
+  if (prototype.view) temper.prefetch(prototype.view, prototype.engine);
   temper.prefetch(prototype.error, path.extname(prototype.error).slice(1));
 
   //
