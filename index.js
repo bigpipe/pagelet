@@ -633,12 +633,6 @@ Pagelet.optimize = function optimize(hook) {
     , prototype = Pagelet.prototype
     , dir = prototype.directory;
 
-  //
-  // This pagelet has already been processed before as pages can share
-  // pagelets.
-  //
-  if (Pagelet.properties) return Pagelet;
-
   if (prototype.view) {
     prototype.view = path.resolve(dir, prototype.view);
     temper.prefetch(prototype.view, prototype.engine);
