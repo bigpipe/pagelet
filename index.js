@@ -601,16 +601,17 @@ Pagelet.readable('call', function calls(data) {
 /**
  * Helper function to resolve assets on the pagelet.
  *
- * @param {String} key name of the property, e.g. css, js
+ * @param {String} key Name of the property, e.g. css, js.
+ * @param {String} dir Optional absolute directory to resolve from.
  * @api public
  */
-Pagelet.resolve = function resolve(key) {
+Pagelet.resolve = function resolve(key, dir) {
   var prototype = this.prototype
     , stack = Array.isArray(prototype[key]) ? prototype[key] : [prototype[key]];
 
   prototype[key] = stack.map(function map(file) {
     if (/^(http:|https:)?\/\//.test(file)) return file;
-    return path.resolve(prototype.directory, file);
+    return path.resolve(dir || prototype.directory, file);
   });
 };
 
