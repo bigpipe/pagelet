@@ -613,42 +613,14 @@ Pagelet.readable('call', function calls(data) {
  * @api public
  */
 Pagelet.on = function on(module) {
-  this.prototype.directory = path.dirname(module.filename);
-  module.exports = this;
+  var prototype = this.prototype
+    , dir = prototype.directory = path.dirname(module.filename);
 
-  return this;
-};
+  if (prototype.view) prototype.view = path.resolve(dir, prototype.view);
 
-/**
- * Optimize the prototypes of the Pagelet to reduce work when we're actually
- * serving the requests.
- *
- * @param {Function} hook Hook into optimize, function will be called with Pagelet.
- * @returns {Pagelet}
- * @api private
- */
-Pagelet.optimize = function optimize(hook) {
-  var Pagelet = this
-    , log = debug('bigpipe:pagelet')
-    , prototype = Pagelet.prototype
-    , dir = prototype.directory;
-
-  if (prototype.view) {
-    prototype.view = path.resolve(dir, prototype.view);
-    temper.prefetch(prototype.view, prototype.engine);
-  }
-
-  //
-  // Ensure that we have a custom error page for when we fail to render this
-  // fragment.
-  //
-  if (prototype.error) {
-    prototype.error = path.resolve(dir, prototype.error);
-    temper.prefetch(prototype.error, prototype.engine);
-  } else {
-    prototype.error = path.resolve(__dirname, 'error.html');
-    temper.prefetch(prototype.error, '');
-  }
+  prototype.error = prototype.error
+    ? path.resolve(dir, prototype.error)
+    : path.resolve(__dirname, 'error.html');
 
   if (prototype.css) {
     prototype.css = Array.isArray(prototype.css) ? prototype.css : [prototype.css];
@@ -674,6 +646,27 @@ Pagelet.optimize = function optimize(hook) {
       return path.resolve(dir, dep);
     });
   }
+
+  return module.exports = this;
+};
+
+/**
+ * Optimize the prototypes of the Pagelet to reduce work when we're actually
+ * serving the requests.
+ *
+ * @param {Function} hook Hook into optimize, function will be called with Pagelet.
+ * @returns {Pagelet}
+ * @api private
+ */
+Pagelet.optimize = function optimize(hook) {
+  var prototype = this.prototype;
+
+  if (prototype.view) temper.prefetch(prototype.view, prototype.engine);
+
+  //
+  // Ensure we have a custom error page when we fail to render this fragment.
+  //
+  temper.prefetch(prototype.error, prototype.engine);
 
   //
   // Support lowercase variant of RPC
