@@ -613,6 +613,8 @@ Pagelet.resolve = function resolve(key, dir) {
     if (/^(http:|https:)?\/\//.test(file)) return file;
     return path.resolve(dir || prototype.directory, file);
   });
+
+  return this;
 };
 
 /**
