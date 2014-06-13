@@ -282,8 +282,6 @@ Pagelet.writable('directory', '');
  */
 Pagelet.writable('get', function get(done) {
   (global.setImmediate || global.setTimeout)(done);
-
-  return this;
 });
 
 //
@@ -309,7 +307,7 @@ Pagelet.writable('get', function get(done) {
  * @api private
  */
 Pagelet.readable('render', function render(options, fn) {
-  if (!fn && 'function' === typeof options) {
+  if ('undefined' === typeof fn) {
     fn = options;
     options = {};
   }
@@ -333,18 +331,6 @@ Pagelet.readable('render', function render(options, fn) {
   data.md5 = temper.fetch(pagelet.view).hash.client;    // MD5 hash of client.
 
   /**
-   * Helper method to either return content sync or async.
-   *
-   * @param {Error} error
-   * @param {String} content
-   * @api private
-   */
-  function provide(error, content) {
-    if (error) content = '';
-    return fn ? fn.call(context, error, content) : content;
-  }
-
-  /**
    * Write the fragmented data.
    *
    * @param {String} content The content to respond with.
@@ -354,7 +340,7 @@ Pagelet.readable('render', function render(options, fn) {
   function fragment(content) {
     if (options.substream || pagelet.page && pagelet.page.mode === 'sync') {
       data.view = content;
-      return provide(undefined, data);
+      return fn.call(context, undefined, data);
     }
 
     data = pagelet.stringify(data, function sanitize(key, data) {
@@ -368,23 +354,26 @@ Pagelet.readable('render', function render(options, fn) {
       .replace(/'/gm, '&#x27;');
     });
 
-    content = pagelet.fragment
+    fn.call(context, undefined, pagelet.fragment
       .replace(/\{pagelet:name\}/g, pagelet.name)
       .replace(/\{pagelet:template\}/g, content.replace(/<!--(.|\s)*?-->/, ''))
-      .replace(/\{pagelet:data\}/g, data);
+      .replace(/\{pagelet:data\}/g, data)
+    );
 
-    return provide(undefined, content);
+    return pagelet;
   }
 
-  /**
-   * Fetch the template and attempt to render with the data provided via result.
-   * Can be passed to async GET method.
-   *
-   * @param {Error} error
-   * @param {Object} result
-   * @api private
-   */
-  function receive(error, result) {
+  //
+  // If we're not authorized, directly call the render method with empty
+  // content. So it renders nothing.
+  //
+  if (!authorized) return fragment('');
+
+  //
+  // Invoke the provided get function and make sure options is an object, from
+  // which `after` can be called in proper context.
+  //
+  pagelet.get(function receive(err, result) {
     var view = temper.fetch(pagelet.view).server
       , content;
 
@@ -397,9 +386,9 @@ Pagelet.readable('render', function render(options, fn) {
     // instead.
     //
     try {
-      if (error) {
-        pagelet.debug('render %s/%s resulted in a error', pagelet.name, pagelet.id, error);
-        throw error; // Throw so we can capture it again.
+      if (err) {
+        pagelet.debug('render %s/%s resulted in a error', pagelet.name, pagelet.id, err);
+        throw err; // Throw so we can capture it again.
       }
 
       content = view(result || {});
@@ -411,7 +400,7 @@ Pagelet.readable('render', function render(options, fn) {
       // office and smear you with peck and feathers for not writing a more stable
       // application.
       //
-      if (!pagelet.error) return provide(e);
+      if (!pagelet.error) return fn(e);
 
       content = temper.fetch(pagelet.error).server(pagelet.merge(result, {
         reason: 'Failed to render: '+ pagelet.name,
@@ -432,20 +421,10 @@ Pagelet.readable('render', function render(options, fn) {
       }, {});
     }
 
-    return fragment(content);
-  }
+    fragment(content);
+  });
 
-  //
-  // If we're not authorized, directly call the render method with empty
-  // content. So it renders nothing.
-  //
-  if (!authorized) return fragment('');
-
-  //
-  // Call GET and allow results to be returned both async and syn.
-  //
-  if (!fn) return receive(undefined, pagelet.get());
-  return pagelet.get(receive);
+  return this;
 });
 
 /**
