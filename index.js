@@ -712,8 +712,22 @@ Pagelet.traverse = function traverse(parent) {
   pagelets.forEach(function each(Pagelet) {
     log('Recursive discovery of child pagelets from %s', parent);
 
+    //
+    // We need to extend the pagelet if it already has a _parent name reference
+    // or will accidentally override it. This you have Pagelet with child
+    // pagelet. And you extend the parent pagelet so it receives a new name. But
+    // the extended parent and regular parent still point to the same child
+    // pagelet. So when we try to traverse these pagelets we will override
+    // _parent property unless we create a new fresh instance and set it on that
+    // instead.
+    //
+    if (Pagelet.prototype._parent && Pagelet.prototype.name !== parent) {
+      Pagelet = Pagelet.extend();
+    }
+
     Pagelet.prototype._parent = parent;
-    found = found.concat(Pagelet.traverse(Pagelet.prototype.name));
+
+    Array.prototype.push.apply(found, Pagelet.traverse(Pagelet.prototype.name));
   });
 
   return found;
