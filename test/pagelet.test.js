@@ -107,6 +107,14 @@ describe('Pagelet', function () {
       assume(P.prototype.dependencies[0]).to.equal('http://code.jquery.com/jquery-2.0.0.js');
       assume(P.prototype.dependencies[1]).to.equal(custom + '/fixtures/custom.js');
     });
+
+    it('can be overriden', function () {
+      P.resolve = function () {
+        throw new Error('fucked');
+      };
+
+      P.on({});
+    });
   });
 
   describe('.optimize', function () {

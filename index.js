@@ -649,7 +649,7 @@ Pagelet.on = function on(module) {
   // Map all dependencies to an absolute path or URL.
   //
   if (prototype.view) prototype.view = path.resolve(dir, prototype.view);
-  this.resolve(['css', 'js', 'dependencies']);
+  Pagelet.resolve.call(this, ['css', 'js', 'dependencies']);
 
   return module.exports = this;
 };
