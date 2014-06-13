@@ -599,6 +599,31 @@ Pagelet.readable('call', function calls(data) {
 });
 
 /**
+ * Helper function to resolve assets on the pagelet.
+ *
+ * @param {String|Array} keys Name(s) of the property, e.g. [css, js].
+ * @param {String} dir Optional absolute directory to resolve from.
+ * @returns {Pagelet}
+ * @api public
+ */
+Pagelet.resolve = function resolve(keys, dir) {
+  var prototype = this.prototype;
+
+  keys = Array.isArray(keys) ? keys : [keys];
+  keys.forEach(function each(key) {
+    if (!prototype[key]) return;
+
+    var stack = Array.isArray(prototype[key]) ? prototype[key] : [prototype[key]];
+    prototype[key] = stack.map(function map(file) {
+      if (/^(http:|https:)?\/\//.test(file)) return file;
+      return path.resolve(dir || prototype.directory, file);
+    });
+  });
+
+  return this;
+};
+
+/**
  * Expose the Pagelet on the exports and parse our the directory. This ensures
  * that we can properly resolve all relative assets:
  *
@@ -613,10 +638,20 @@ Pagelet.readable('call', function calls(data) {
  * @api public
  */
 Pagelet.on = function on(module) {
-  this.prototype.directory = path.dirname(module.filename);
-  module.exports = this;
+  var prototype = this.prototype
+    , dir = prototype.directory = path.dirname(module.filename);
 
-  return this;
+  prototype.error = prototype.error
+    ? path.resolve(dir, prototype.error)
+    : path.resolve(__dirname, 'error.html');
+
+  //
+  // Map all dependencies to an absolute path or URL.
+  //
+  if (prototype.view) prototype.view = path.resolve(dir, prototype.view);
+  this.resolve(['css', 'js', 'dependencies']);
+
+  return module.exports = this;
 };
 
 /**
@@ -628,58 +663,14 @@ Pagelet.on = function on(module) {
  * @api private
  */
 Pagelet.optimize = function optimize(hook) {
-  var Pagelet = this
-    , log = debug('bigpipe:pagelet')
-    , prototype = Pagelet.prototype
-    , dir = prototype.directory;
+  var prototype = this.prototype;
 
   //
-  // This pagelet has already been processed before as pages can share
-  // pagelets.
+  // Prefetch the template if a view is available.
+  // Ensure we have a custom error page when we fail to render this fragment.
   //
-  if (Pagelet.properties) return Pagelet;
-
-  if (prototype.view) {
-    prototype.view = path.resolve(dir, prototype.view);
-    temper.prefetch(prototype.view, prototype.engine);
-  }
-
-  //
-  // Ensure that we have a custom error page for when we fail to render this
-  // fragment.
-  //
-  if (prototype.error) {
-    prototype.error = path.resolve(dir, prototype.error);
-    temper.prefetch(prototype.error, prototype.engine);
-  } else {
-    prototype.error = path.resolve(__dirname, 'error.html');
-    temper.prefetch(prototype.error, '');
-  }
-
-  if (prototype.css) {
-    prototype.css = Array.isArray(prototype.css) ? prototype.css : [prototype.css];
-    Pagelet.prototype.css = prototype.css.map(function resolveCSS(css) {
-      return path.resolve(dir, css);
-    });
-  }
-
-  if (prototype.js) {
-    prototype.js = Array.isArray(prototype.js) ? prototype.js : [prototype.js];
-    Pagelet.prototype.js = prototype.js.map(function resolveJS(js) {
-      return path.resolve(dir, js);
-    });
-  }
-
-  //
-  // Make sure that all our dependencies are also directly mapped to an
-  // absolute URL.
-  //
-  if (prototype.dependencies) {
-    prototype.dependencies = prototype.dependencies.map(function each(dep) {
-      if (/^(http:|https:)?\/\//.test(dep)) return dep;
-      return path.resolve(dir, dep);
-    });
-  }
+  if (prototype.view) temper.prefetch(prototype.view, prototype.engine);
+  temper.prefetch(prototype.error, path.extname(prototype.error).slice(1));
 
   //
   // Support lowercase variant of RPC
@@ -700,8 +691,7 @@ Pagelet.optimize = function optimize(hook) {
   // a generated instance to it's original state.
   //
   if ('function' === typeof hook) hook(Pagelet);
-
-  return Pagelet;
+  return this;
 };
 
 /**

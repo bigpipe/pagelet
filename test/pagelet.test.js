@@ -2,6 +2,7 @@ describe('Pagelet', function () {
   'use strict';
 
   var Pagelet = require('../').extend({ name: 'test' })
+    , custom = '/unexisting/absolute/path/to/prepend'
     , assume = require('assume')
     , pagelet
     , P;
@@ -9,7 +10,13 @@ describe('Pagelet', function () {
   beforeEach(function () {
     P = Pagelet.extend({
       directory: __dirname,
-      view: 'fixtures/view.html'
+      view: 'fixtures/view.html',
+      css: 'fixtures/style.css',
+      js: '//cdnjs.cloudflare.com/ajax/libs/d3/3.4.8/d3.min.js',
+      dependencies: [
+        'http://code.jquery.com/jquery-2.0.0.js',
+        'fixtures/custom.js'
+      ]
     });
 
     pagelet = new P();
@@ -40,6 +47,66 @@ describe('Pagelet', function () {
       assume(pagelet.prototype.directory).to.be.a('string');
       assume(pagelet.prototype.directory).to.equal(__dirname);
     });
+
+    it('resolves the view', function () {
+      assume(P.prototype.view).to.equal('fixtures/view.html');
+      P.on(module);
+
+      assume(P.prototype.view).to.equal(__dirname +'/fixtures/view.html');
+    });
+
+    it('resolves the `error` view');
+    it('resolves the `css` files in to an array');
+    it('resolves the `js` files in to an array');
+    it('resolves the `dependencies` files in to an array');
+  });
+
+  describe('.resolve', function () {
+    it('is a function', function () {
+      assume(Pagelet.resolve).to.be.a('function');
+      assume(P.resolve).to.be.a('function');
+      assume(Pagelet.resolve).to.equal(P.resolve);
+    });
+
+    it('will resolve provided property on prototype', function () {
+      var result = P.resolve('css');
+
+      assume(result).to.equal(P);
+      assume(P.prototype.css).to.be.an('array');
+      assume(P.prototype.css.length).to.equal(1);
+      assume(P.prototype.css[0]).to.equal(__dirname + '/fixtures/style.css');
+    });
+
+    it('can resolve multiple properties at once', function () {
+      P.resolve(['css', 'js']);
+
+      assume(P.prototype.css).to.be.an('array');
+      assume(P.prototype.js).to.be.an('array');
+      assume(P.prototype.css.length).to.equal(1);
+      assume(P.prototype.js.length).to.equal(1);
+    });
+
+    it('can be provided with a custom source directory', function () {
+      P.resolve('css', custom);
+
+      assume(P.prototype.css[0]).to.equal(custom + '/fixtures/style.css');
+    });
+
+    it('only resolves local files', function () {
+      P.resolve('js', custom);
+
+      assume(P.prototype.js[0]).to.not.include(custom);
+      assume(P.prototype.js[0]).to.equal('//cdnjs.cloudflare.com/ajax/libs/d3/3.4.8/d3.min.js');
+    });
+
+    it('can handle property values that are already an array', function () {
+      P.resolve('dependencies', custom);
+
+      assume(P.prototype.dependencies.length).to.equal(2);
+      assume(P.prototype.dependencies[0]).to.not.include(custom);
+      assume(P.prototype.dependencies[0]).to.equal('http://code.jquery.com/jquery-2.0.0.js');
+      assume(P.prototype.dependencies[1]).to.equal(custom + '/fixtures/custom.js');
+    });
   });
 
   describe('.optimize', function () {
@@ -49,24 +116,10 @@ describe('Pagelet', function () {
       assume(Pagelet.optimize).to.equal(P.optimize);
     });
 
-    it('resolves the view', function () {
-      assume(P.prototype.view).to.equal('fixtures/view.html');
-      P.optimize();
-
-      assume(P.prototype.view).to.equal(__dirname +'/fixtures/view.html');
-    });
-
     it('prefetches the `view`');
-    it('resolves the `error` view');
     it('prefetches the `error` view');
-    it('transforms `css` in to an array');
-    it('resolves the `css` files in to an array');
-    it('resolves the `js` files in to an array');
-    it('only resolves non http/https dependencies');
     it('allows rpc as a string');
     it('allows lowercase rpc');
-    it('stores all introduced properties as array');
-    it('adds a freelist factory');
   });
 
   describe('.traverse', function () {
