@@ -487,9 +487,11 @@ Pagelet.readable('connect', function connect(spark, next) {
           }
 
           pagelet[data.type](data.body || {}, data.files || [], function processed(err, context) {
-            if (err) return stream.write({ type: data.type, err: err });
+            if (err) return stream.write({ type: 'err', err: err });
 
             pagelet.render({ data: context, substream: true }, function rendered(err, fragment) {
+              if (err) return stream.write({ type: 'err', err: err });
+
               stream.write({ type: 'fragment', frag: fragment, err: err });
             });
           });
