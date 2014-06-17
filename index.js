@@ -328,7 +328,10 @@ Pagelet.readable('render', function render(options, fn) {
   data.authorized = authorized;                         // Pagelet was authorized.
   data.streaming = !!this.streaming;                    // Submit streaming.
   data.parent = pagelet._parent;                        // Send parent name along.
-  data.md5 = temper.fetch(pagelet.view).hash.client;    // MD5 hash of client.
+  data.hash = {
+    error: temper.fetch(pagelet.error).hash.client,     // MD5 hash of error view.
+    client: temper.fetch(pagelet.view).hash.client      // MD5 hash of client view.
+  };
 
   /**
    * Write the fragmented data.
