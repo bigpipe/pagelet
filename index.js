@@ -353,7 +353,7 @@ Pagelet.readable('render', function render(options, fn) {
       .replace(/&/gm, '&amp;')
       .replace(/</gm, '&lt;')
       .replace(/>/gm, '&gt;')
-      .replace(/"/gm, '&quote;')
+      .replace(/"/gm, '&quot;')
       .replace(/'/gm, '&#x27;');
     });
 
