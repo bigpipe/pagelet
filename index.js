@@ -18,7 +18,7 @@ var slice = Array.prototype.slice;
 // Create singletonian temper usable for constructed pagelets. This will ensure
 // caching works properly and allows optimize to use temper.
 //
-var temper = new Temper();
+var temper = new Temper;
 
 /**
  * A pagelet is the representation of an item, section, column, widget on the
@@ -737,6 +737,11 @@ Pagelet.traverse = function traverse(parent) {
 
   return found;
 };
+
+//
+// Make temper available on the constructor, for easy access to the singleton.
+//
+Pagelet.temper = temper;
 
 //
 // Expose the pagelet.
