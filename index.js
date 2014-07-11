@@ -12,13 +12,8 @@ var jstringify = require('json-stringify-safe')
 //
 // Cache long prototype lookups to increase speed + write shorter code.
 //
-var slice = Array.prototype.slice;
-
-//
-// Create singletonian temper usable for constructed pagelets. This will ensure
-// caching works properly and allows optimize to use temper.
-//
-var temper = new Temper;
+var slice = Array.prototype.slice
+  , temper;
 
 /**
  * A pagelet is the representation of an item, section, column, widget on the
@@ -27,13 +22,15 @@ var temper = new Temper;
  * @constructor
  * @api public
  */
-function Pagelet() {
+function Pagelet(options) {
   this.fuse();
+
+  options = options || {};
 
   this.writable('_authorized', null);                     // Are we authorized
   this.writable('substream', null);                       // Substream from Primus.
-  this.readable('temper', temper);                        // Template parser.
-  this.writable('id', [1, 1, 1, 1].map(function generator() {
+  this.readable('temper', options.temper || temper);      // Template parser.
+  this.writable('id', options.id || [1, 1, 1, 1].map(function generator() {
     return Math.random().toString(36).substring(2).toUpperCase();
   }).join('-'));
 
@@ -147,16 +144,12 @@ Pagelet.writable('authorize', null);
  * @type {Boolean}
  * @private
  */
-Pagelet.writable('authorized', {
-  get: function get() {
-    return 'function' !== typeof this.authorize       // No authorization needed.
-    || this._authorized && this._authorized !== null; // Authorization has been done.
-  },
-
-  set: function set(value) {
-    return this._authorized = !!value;
-  }
-}, true);
+Pagelet.set('authorized', function get() {
+  return 'function' !== typeof this.authorize       // No authorization needed.
+  || this._authorized && this._authorized !== null; // Authorization has been done.
+}, function set(value) {
+  return this._authorized = !!value;
+});
 
 /**
  * A pagelet has been initialized.
@@ -667,15 +660,23 @@ Pagelet.on = function on(module) {
  * @returns {Pagelet}
  * @api private
  */
-Pagelet.optimize = function optimize(hook) {
+Pagelet.optimize = function optimize(options) {
   var prototype = this.prototype;
+
+  options = options || {};
+  options.temper = options.temper || temper || (temper = new Temper()) ;
 
   //
   // Prefetch the template if a view is available.
   // Ensure we have a custom error page when we fail to render this fragment.
   //
-  if (prototype.view) temper.prefetch(prototype.view, prototype.engine);
-  temper.prefetch(prototype.error, path.extname(prototype.error).slice(1));
+  if (prototype.view) {
+    options.temper.prefetch(prototype.view, prototype.engine);
+  }
+
+  if (prototype.error) {
+    options.temper.prefetch(prototype.error, path.extname(prototype.error).slice(1));
+  }
 
   //
   // Support lowercase variant of RPC
@@ -695,7 +696,10 @@ Pagelet.optimize = function optimize(hook) {
   // "fixed" properties which later can be re-used again to restore
   // a generated instance to it's original state.
   //
-  if ('function' === typeof hook) hook(Pagelet);
+  if ('function' === typeof options.transform) {
+    options.transform(Pagelet);
+  }
+
   return this;
 };
 
@@ -737,11 +741,6 @@ Pagelet.traverse = function traverse(parent) {
 
   return found;
 };
-
-//
-// Make temper available on the constructor, for easy access to the singleton.
-//
-Pagelet.temper = temper;
 
 //
 // Expose the pagelet.

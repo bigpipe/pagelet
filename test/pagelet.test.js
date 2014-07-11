@@ -124,6 +124,17 @@ describe('Pagelet', function () {
       assume(Pagelet.optimize).to.equal(P.optimize);
     });
 
+    it('uses the supplied temper for prefetching', function (next) {
+      var calls = 0;
+      P.optimize({
+        temper: {
+          prefetch: function () {
+            if (++calls === 2) next();
+          }
+        }
+      })
+    });
+
     it('prefetches the `view`');
     it('prefetches the `error` view');
     it('allows rpc as a string');
