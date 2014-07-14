@@ -600,7 +600,7 @@ Pagelet.readable('conditional', function conditional(req, list, fn) {
 });
 
 /**
- * Call an rpc method.
+ * Call an RPC method.
  *
  * @param {Object} data The RPC call information.
  * @api private
