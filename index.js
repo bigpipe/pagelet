@@ -38,7 +38,7 @@ function Pagelet(options) {
 
   options = options || {};
 
-  this.writable('_enabled', null);                        // Are we enabled.
+  this.writable('_active', null);                         // Are we active.
   this.writable('substream', null);                       // Substream from Primus.
   this.readable('temper', options.temper || temper);      // Template parser.
 
@@ -299,17 +299,17 @@ Pagelet.readable('stringify', function stringify(data, replacer) {
 //
 
 /**
- * Checks if we're an enabled Pagelet or if we still need to a do an enabled
- * check against the `if` function.
+ * Checks if we're an active Pagelet or if we still need to a do an check
+ * against the `if` function.
  *
  * @type {Boolean}
  * @private
  */
-Pagelet.set('enabled', function get() {
+Pagelet.set('active', function get() {
   return 'function' !== typeof this.if              // No conditional check needed.
-  || this._enabled && this._enabled !== null;       // Conditional check has been done.
+  || this._active && this._active !== null;         // Conditional check has been done.
 }, function set(value) {
-  return this._enabled = !!value;
+  return this._active = !!value;
 });
 
 /**
@@ -348,8 +348,9 @@ Pagelet.readable('render', function render(options, fn) {
    * @api private
    */
   function fragment(content) {
-    var enabled = pagelet.enabled;
-    if (!enabled) content = '';
+    var active = pagelet.active;
+
+    if (!active) content = '';
 
     if (options.substream || pagelet.page && pagelet.page.mode === 'sync') {
       data.view = content;
@@ -359,8 +360,7 @@ Pagelet.readable('render', function render(options, fn) {
     data.id = data.id || pagelet.id;                      // Pagelet id.
     data.mode = data.mode || pagelet.mode;                // Pagelet render mode.
     data.rpc = data.rpc || pagelet.RPC;                   // RPC methods.
-    data.remove = enabled ? false : pagelet.remove;       // Remove from DOM.
-    data.enabled = enabled;                               // Pagelet was enabled.
+    data.remove = active ? false : pagelet.remove;        // Remove from DOM.
     data.streaming = !!pagelet.streaming;                 // Submit streaming.
     data.parent = pagelet._parent;                        // Send parent name along.
     data.hash = {
@@ -372,11 +372,11 @@ Pagelet.readable('render', function render(options, fn) {
       if ('string' !== typeof data) return data;
 
       return data
-      .replace(/&/gm, '&amp;')
-      .replace(/</gm, '&lt;')
-      .replace(/>/gm, '&gt;')
-      .replace(/"/gm, '&quot;')
-      .replace(/'/gm, '&#x27;');
+        .replace(/&/gm, '&amp;')
+        .replace(/</gm, '&lt;')
+        .replace(/>/gm, '&gt;')
+        .replace(/"/gm, '&quot;')
+        .replace(/'/gm, '&#x27;');
     });
 
     fn.call(context, undefined, pagelet.fragment
@@ -460,7 +460,7 @@ Pagelet.readable('connect', function connect(spark, next) {
   var pagelet = this;
 
   /**
-   * Create a new substream.
+   * Create a new Substream.
    *
    * @param {Boolean} enabled Allowed to use this pagelet.
    * @returns {Pagelet}
