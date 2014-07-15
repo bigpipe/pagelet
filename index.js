@@ -584,7 +584,7 @@ Pagelet.readable('conditional', function conditional(req, list, fn) {
    * @api private
    */
   function enabled(value) {
-    fn(pagelet.enabled = value);
+    fn.call(pagelet, pagelet.enabled = value);
   }
 
   if ('boolean' === typeof this._enabled) {
@@ -629,6 +629,21 @@ Pagelet.readable('call', function calls(data) {
       id: data.id
     });
   }].concat(data.args));
+});
+
+/**
+ * Destroy the pagelet and remove all the back references so it can be safely
+ * garbage collected.
+ *
+ * @api public
+ */
+Pagelet.readable('destroy', function destroy() {
+  if (this.substream) this.substream.end();
+
+  this.temper = null;
+  this.removeAllListeners();
+
+  return this;
 });
 
 /**
