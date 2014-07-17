@@ -40,7 +40,7 @@ function Pagelet(options) {
 
   this.writable('_active', null);                         // Are we active.
   this.writable('substream', null);                       // Substream from Primus.
-  this.readable('temper', options.temper || temper);      // Template parser.
+  this.writable('temper', options.temper || temper);      // Template parser.
 
   this.writable('id', options.id || [1, 1, 1, 1].map(generator).join('-'));
 
