@@ -584,13 +584,13 @@ Pagelet.readable('conditional', function conditional(req, list, fn) {
    * @api private
    */
   function enabled(value) {
-    fn.call(pagelet, pagelet.enabled = value);
+    fn.call(pagelet, pagelet.active = value);
   }
 
-  if ('boolean' === typeof this._enabled) {
-    fn(pagelet.enabled);
+  if ('boolean' === typeof this._active) {
+    fn(pagelet.active);
   } else if ('function' !== typeof this.if) {
-    fn(pagelet.enabled = true);
+    fn(pagelet.active = true);
   } else {
     if (pagelet.if.length === 2) pagelet.if(req, enabled);
     else pagelet.if(req, list || [], enabled);
