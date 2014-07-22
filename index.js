@@ -661,7 +661,10 @@ Pagelet.resolve = function resolve(keys, dir) {
   keys.forEach(function each(key) {
     if (!prototype[key]) return;
 
-    var stack = Array.isArray(prototype[key]) ? prototype[key] : [prototype[key]];
+    var stack = Array.isArray(prototype[key])
+      ? prototype[key]
+      : [prototype[key]];
+
     prototype[key] = stack.map(function map(file) {
       if (/^(http:|https:)?\/\//.test(file)) return file;
       return path.resolve(dir || prototype.directory, file);
@@ -706,12 +709,21 @@ Pagelet.on = function on(module) {
  * Optimize the prototypes of the Pagelet to reduce work when we're actually
  * serving the requests.
  *
- * @param {Function} hook Hook into optimize, function will be called with Pagelet.
+ * Options:
+ *
+ * - temper: A customn temper instance we want to use to compile the templates.
+ * - transform: Transformation callback so plugins can hook in the optimizer.
+ *
+ * @param {Object} options Optimization configuration.
+ * @param {Function} next Completion callback for async execution.
  * @returns {Pagelet}
  * @api private
  */
-Pagelet.optimize = function optimize(options) {
-  var prototype = this.prototype;
+Pagelet.optimize = function optimize(options, next) {
+  var prototype = this.prototype
+    , name = prototype.name
+    , async = false
+    , err;
 
   options = options || {};
   options.temper = options.temper || temper || (temper = new Temper()) ;
@@ -737,8 +749,21 @@ Pagelet.optimize = function optimize(options) {
   }
 
   if ('string' === typeof prototype.RPC) {
-    prototype.RPC = prototype.RPC.split(/[\s|\,]/);
+    prototype.RPC = prototype.RPC.split(/[\s|\,]+/);
   }
+
+  //
+  // Validate the existance of the RPC methods, this reduces possible typo's
+  //
+  prototype.RPC.forEach(function validate(method) {
+    if (!(method in prototype)) return err = new Error(
+      name +' is missing RPC function `'+ method +'` on prototype'
+    );
+
+    if ('function' !== typeof prototype[method]) return err = new Error(
+      name +'#'+ method +' is not function which is required for RPC usage'
+    );
+  });
 
   //
   // Allow plugins to hook in the transformation process, so emit it when
@@ -746,9 +771,12 @@ Pagelet.optimize = function optimize(options) {
   // "fixed" properties which later can be re-used again to restore
   // a generated instance to it's original state.
   //
-  if ('function' === typeof options.transform) {
-    options.transform(Pagelet);
+  if ('function' === typeof options.transform && !err) {
+    if (options.transform.length === 2) async = true;
+    options.transform(Pagelet, next);
   }
+
+  if (!async) process.nextTick(next.bind(next, err));
 
   return this;
 };
@@ -757,6 +785,7 @@ Pagelet.optimize = function optimize(options) {
  * Discover all pagelets recursive. Fabricate will create constructable instances
  * from the provided value of prototype.pagelets.
  *
+ * @param {Pagelet} parent Reference to the parent pagelet.
  * @return {Array} collection of pagelets instances.
  * @api public
  */
