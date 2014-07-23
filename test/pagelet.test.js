@@ -7,6 +7,12 @@ describe('Pagelet', function () {
     , pagelet
     , P;
 
+  //
+  // A lazy mans temper, we just want ignore all temper actions sometimes
+  // because our pagelet is not exported using `.on(module)`
+  //
+  var temper = { prefetch: function () {} };
+
   beforeEach(function () {
     P = Pagelet.extend({
       directory: __dirname,
@@ -22,7 +28,7 @@ describe('Pagelet', function () {
     pagelet = new P();
   });
 
-  afterEach(function () {
+  afterEach(function each() {
     pagelet = null;
   });
 
@@ -129,16 +135,66 @@ describe('Pagelet', function () {
       P.optimize({
         temper: {
           prefetch: function () {
-            if (++calls === 2) next();
+            ++calls;
           }
         }
-      })
+      }, function (err) {
+        if (err) return next(err);
+
+        assume(calls).to.equal(2);
+        next();
+      });
     });
 
     it('prefetches the `view`');
     it('prefetches the `error` view');
-    it('allows rpc as a string');
-    it('allows lowercase rpc');
+
+    it('allows rpc as a string', function (next) {
+      var X = P.extend({
+        RPC: 'fixtures, bar',
+        fixtures: function () {},
+        bar: function () {}
+      });
+
+      X.optimize({ temper: temper }, function (err) {
+        if (err) return next(err);
+
+        assume(X.prototype.RPC).to.be.a('array');
+        assume(X.prototype.RPC).to.have.length(2);
+        assume(X.prototype.RPC).to.include('bar');
+        assume(X.prototype.RPC).to.include('fixtures');
+
+        next();
+      });
+    });
+
+    it('checks if all rpc functions are available', function (next) {
+      var X = P.extend({
+        RPC: 'fixtures, bar',
+        bar: function () {}
+      });
+
+      X.optimize({ temper: temper }, function (err) {
+        assume(err).to.be.a('error');
+        assume(err.message).to.include('fixtures');
+
+        next();
+      });
+    });
+
+    it('allows lowercase rpc', function (next) {
+      var X = P.extend({
+        rpc: ['fixtures', 'bar'],
+        bar: function () {}
+      });
+
+      X.optimize({ temper: temper }, function (err) {
+        assume(err).to.be.a('error');
+        assume(err.message).to.include('fixtures');
+
+        next();
+      });
+    });
   });
 
   describe('.traverse', function () {

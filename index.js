@@ -16,6 +16,17 @@ var slice = Array.prototype.slice
   , temper;
 
 /**
+ * Simple helper function to generate some what unique id's for given
+ * constructed pagelet.
+ *
+ * @returns {String}
+ * @api private
+ */
+function generator() {
+  return Math.random().toString(36).substring(2).toUpperCase();
+}
+
+/**
  * A pagelet is the representation of an item, section, column, widget on the
  * page. It's basically a small sand boxed application within your page.
  *
@@ -27,12 +38,11 @@ function Pagelet(options) {
 
   options = options || {};
 
-  this.writable('_authorized', null);                     // Are we authorized
+  this.writable('_active', null);                         // Are we active.
   this.writable('substream', null);                       // Substream from Primus.
-  this.readable('temper', options.temper || temper);      // Template parser.
-  this.writable('id', options.id || [1, 1, 1, 1].map(function generator() {
-    return Math.random().toString(36).substring(2).toUpperCase();
-  }).join('-'));
+  this.writable('temper', options.temper || temper);      // Template parser.
+
+  this.writable('id', options.id || [1, 1, 1, 1].map(generator).join('-'));
 
   //
   // Add an correctly namespaced debug method so it easier to see which pagelet
@@ -42,26 +52,6 @@ function Pagelet(options) {
 }
 
 fuse(Pagelet, Stream, { emits: false });
-
-/**
- * A safe and fast `JSON.stringify`.
- *
- * @param {Mixed} data Data that needs to be transformed in to a string.
- * @param {Function} replacer Data replacer.
- * @returns {String}
- * @api public
- */
-Pagelet.readable('stringify', function stringify(data, replacer) {
-  var result;
-
-  try { result = JSON.stringify(data, replacer); }
-  catch (e) {
-    this.debug('Failed to normally stringify the data');
-    result = jstringify(data, replacer);
-  }
-
-  return result;
-});
 
 /**
  * The name of this pagelet so it can checked to see if's enabled. In addition
@@ -118,38 +108,24 @@ Pagelet.writable('RPC', []);
 Pagelet.writable('mode', 'html');
 
 /**
- * An authorization handler to see if the request is authorized to interact with
- * this pagelet. This is set to `null` by default as there isn't any
- * authorization in place. The authorization function will receive 2 arguments:
+ * Conditionally load this pagelet. It can also be used authorization handler.
+ * If the incoming request is not authorized you can prevent this pagelet from
+ * showing. The assigned function receives 3 arguments.
  *
  * - req, the http request that initialized the pagelet
+ * - list, array of pagelets that will be tried if this pagelet
  * - done, a callback function that needs to be called with only a boolean.
  *
  * ```js
  * Pagelet.extend({
- *   authorize: function authorize(req, done) {
+ *   if: function conditional(req, left, done) {
  *     done(true); // True indicates that the request is authorized for access.
  *   }
  * });
  * ```
  *
- * @type {Function}
- * @public
  */
-Pagelet.writable('authorize', null);
-
-/**
- * Checks if we're an authorized Pagelet.
- *
- * @type {Boolean}
- * @private
- */
-Pagelet.set('authorized', function get() {
-  return 'function' !== typeof this.authorize       // No authorization needed.
-  || this._authorized && this._authorized !== null; // Authorization has been done.
-}, function set(value) {
-  return this._authorized = !!value;
-});
+Pagelet.writable('if', null);
 
 /**
  * A pagelet has been initialized.
@@ -160,10 +136,13 @@ Pagelet.set('authorized', function get() {
 Pagelet.writable('initialize', null);
 
 /**
- * The actual chunk of the response that is written for each pagelet.
+ * The actual chunk of the response that is written for each pagelet. The
+ * current template is compatible with our `bigpipe.js` client code but if you
+ * want to use the pagelets as a stand alone template/view you might want to
+ * change this to a simple string.
  *
  * @type {String}
- * @private
+ * @public
  */
 Pagelet.writable('fragment', require('fs').readFileSync(__dirname +'/pagelet.fragment', 'utf-8')
   .split('\n')
@@ -171,7 +150,7 @@ Pagelet.writable('fragment', require('fs').readFileSync(__dirname +'/pagelet.fra
 );
 
 /**
- * Remove the DOM element if we are unauthorized. This will make it easier to
+ * Remove the DOM element if we are not enabled. This will make it easier to
  * create conditional layouts without having to manage the pointless DOM
  * elements.
  *
@@ -179,6 +158,15 @@ Pagelet.writable('fragment', require('fs').readFileSync(__dirname +'/pagelet.fra
  * @public
  */
 Pagelet.writable('remove', true);
+
+/**
+ * List of keys in the data that will be supplied to the client-side script.
+ * Paths to nested keys can be supplied via dot notation.
+ *
+ * @type {Array}
+ * @public
+ */
+Pagelet.writable('query', []);
 
 /**
  * The location of your view template. But just because you've got a view
@@ -193,15 +181,6 @@ Pagelet.writable('remove', true);
  * @public
  */
 Pagelet.writable('view', '');
-
-/**
- * List of keys in the data that will be supplied to the client-side script.
- * Paths to nested keys can be supplied via dot notation.
- *
- * @type {Array}
- * @public
- */
-Pagelet.writable('query', []);
 
 /**
  * The location of your error template. This template will be rendered when:
@@ -219,7 +198,9 @@ Pagelet.writable('error', path.join(__dirname, 'error.html'));
 
 /**
  * Optional template engine preference. Useful when we detect the wrong template
- * engine based on the view's file name.
+ * engine based on the view's file name. If no engine is provide we will attempt
+ * to figure out the correct template engine based on the file extension of the
+ * provided template path.
  *
  * @type {String}
  * @public
@@ -259,10 +240,18 @@ Pagelet.writable('dependencies', []);
 
 /**
  * Save the location where we got our resources from, this will help us with
- * fetching assets from the correct location.
+ * fetching assets from the correct location. This property is automatically set
+ * when the you do:
+ *
+ * ```js
+ * Pagelet.extend({}).on(module);
+ * ```
+ *
+ * If you do not use this pattern make sure you set an absolute path the
+ * directory that the pagelet and all it's resources are in.
  *
  * @type {String}
- * @private
+ * @public
  */
 Pagelet.writable('directory', '');
 
@@ -277,6 +266,28 @@ Pagelet.writable('get', function get(done) {
   (global.setImmediate || global.setTimeout)(done);
 });
 
+/**
+ * A safe and fast(er) alternative to the `json-stringify-save` as uses the
+ * replacer to make the transformation save. This is really costly for larger
+ * JSON structures. We assume that all the JSON contains no cyclic references.
+ *
+ * @param {Mixed} data Data that needs to be transformed in to a string.
+ * @param {Function} replacer Optional data replacer.
+ * @returns {String}
+ * @api public
+ */
+Pagelet.readable('stringify', function stringify(data, replacer) {
+  var result;
+
+  try { result = JSON.stringify(data, replacer); }
+  catch (e) {
+    this.debug('Failed to normally stringify the data');
+    result = jstringify(data, replacer);
+  }
+
+  return result;
+});
+
 //
 // !IMPORTANT
 //
@@ -288,11 +299,27 @@ Pagelet.writable('get', function get(done) {
 //
 
 /**
+ * Checks if we're an active Pagelet or if we still need to a do an check
+ * against the `if` function.
+ *
+ * @type {Boolean}
+ * @private
+ */
+Pagelet.set('active', function get() {
+  return 'function' !== typeof this.if              // No conditional check needed.
+  || this._active && this._active !== null;         // Conditional check has been done.
+}, function set(value) {
+  return this._active = !!value;
+});
+
+/**
  * Render takes care of all the data merging and `get` invocation.
  *
  * Options:
+ *
  *   - context: Context on which to call `after`, defaults to pagelet.
  *   - data: stringified object representation to pass to the client.
+ *   - pagelets: Alternate pagelets to be used when this pagelet is not enabled.
  *
  * @param {Object} options Add post render functionality.
  * @param {Function} fn Completion callback.
@@ -308,23 +335,10 @@ Pagelet.readable('render', function render(options, fn) {
   options = options || {};
 
   var context = options.context || this
-    , authorized = this.authorized
     , data = options.data || {}
     , temper = this.temper
     , query = this.query
     , pagelet = this;
-
-  data.id = data.id || this.id;                         // Pagelet id.
-  data.mode = data.mode || this.mode;                   // Pagelet render mode.
-  data.rpc = data.rpc || this.RPC;                      // RPC methods.
-  data.remove = authorized ? false : this.remove;       // Remove from DOM.
-  data.authorized = authorized;                         // Pagelet was authorized.
-  data.streaming = !!this.streaming;                    // Submit streaming.
-  data.parent = pagelet._parent;                        // Send parent name along.
-  data.hash = {
-    error: temper.fetch(pagelet.error).hash.client,     // MD5 hash of error view.
-    client: temper.fetch(pagelet.view).hash.client      // MD5 hash of client view.
-  };
 
   /**
    * Write the fragmented data.
@@ -334,20 +348,35 @@ Pagelet.readable('render', function render(options, fn) {
    * @api private
    */
   function fragment(content) {
+    var active = pagelet.active;
+
+    if (!active) content = '';
+
     if (options.substream || pagelet.page && pagelet.page.mode === 'sync') {
       data.view = content;
       return fn.call(context, undefined, data);
     }
 
+    data.id = data.id || pagelet.id;                      // Pagelet id.
+    data.mode = data.mode || pagelet.mode;                // Pagelet render mode.
+    data.rpc = data.rpc || pagelet.RPC;                   // RPC methods.
+    data.remove = active ? false : pagelet.remove;        // Remove from DOM.
+    data.streaming = !!pagelet.streaming;                 // Submit streaming.
+    data.parent = pagelet._parent;                        // Send parent name along.
+    data.hash = {
+      error: temper.fetch(pagelet.error).hash.client,     // MD5 hash of error view.
+      client: temper.fetch(pagelet.view).hash.client      // MD5 hash of client view.
+    };
+
     data = pagelet.stringify(data, function sanitize(key, data) {
       if ('string' !== typeof data) return data;
 
       return data
-      .replace(/&/gm, '&amp;')
-      .replace(/</gm, '&lt;')
-      .replace(/>/gm, '&gt;')
-      .replace(/"/gm, '&quot;')
-      .replace(/'/gm, '&#x27;');
+        .replace(/&/gm, '&amp;')
+        .replace(/</gm, '&lt;')
+        .replace(/>/gm, '&gt;')
+        .replace(/"/gm, '&quot;')
+        .replace(/'/gm, '&#x27;');
     });
 
     fn.call(context, undefined, pagelet.fragment
@@ -359,68 +388,64 @@ Pagelet.readable('render', function render(options, fn) {
     return pagelet;
   }
 
-  //
-  // If we're not authorized, directly call the render method with empty
-  // content. So it renders nothing.
-  //
-  if (!authorized) return fragment('');
-
-  //
-  // Invoke the provided get function and make sure options is an object, from
-  // which `after` can be called in proper context.
-  //
-  pagelet.get(function receive(err, result) {
-    var view = temper.fetch(pagelet.view).server
-      , content;
+  return this.conditional(this.page.req, options.pagelets, function auth(enabled) {
+    if (!enabled) return fragment('');
 
     //
-    // We've made it this far, but now we have to cross our fingers and HOPE that
-    // our given template can actually handle the data correctly without throwing
-    // an error. As the rendering is done synchronously, we wrap it in a try/catch
-    // statement and hope that an error is thrown when the template fails to
-    // render the content. If there's an error we will process the error template
-    // instead.
+    // Invoke the provided get function and make sure options is an object, from
+    // which `after` can be called in proper context.
     //
-    try {
-      if (err) {
-        pagelet.debug('render %s/%s resulted in a error', pagelet.name, pagelet.id, err);
-        throw err; // Throw so we can capture it again.
+    pagelet.get(function receive(err, result) {
+      var view = temper.fetch(pagelet.view).server
+        , content;
+
+      //
+      // We've made it this far, but now we have to cross our fingers and HOPE
+      // that our given template can actually handle the data correctly
+      // without throwing an error. As the rendering is done synchronously, we
+      // wrap it in a try/catch statement and hope that an error is thrown
+      // when the template fails to render the content. If there's an error we
+      // will process the error template instead.
+      //
+      try {
+        if (err) {
+          pagelet.debug('render %s/%s resulted in a error', pagelet.name, pagelet.id, err);
+          throw err; // Throw so we can capture it again.
+        }
+
+        content = view(result || {});
+      } catch (e) {
+        //
+        // This is basically fly or die, if the supplied error template throws
+        // an error while rendering we're basically fucked, your server will
+        // crash, an angry mob of customers with pitchforks will kick in the
+        // doors of your office and smear you with peck and feathers for not
+        // writing a more stable application.
+        //
+        if (!pagelet.error) return fn(e);
+
+        content = temper.fetch(pagelet.error).server(pagelet.merge(result, {
+          reason: 'Failed to render: '+ pagelet.name,
+          env: process.env.NODE_ENV || 'development',
+          message: e.message,
+          stack: e.stack,
+          error: e
+        }));
       }
 
-      content = view(result || {});
-    } catch (e) {
       //
-      // This is basically fly or die, if the supplied error template throws an
-      // error while rendering we're basically fucked, your server will crash,
-      // an angry mob of customers with pitchforks will kick in the doors of your
-      // office and smear you with peck and feathers for not writing a more stable
-      // application.
+      // Add queried parts of data, so the client-side script can use it.
       //
-      if (!pagelet.error) return fn(e);
+      if ('object' === typeof result && Array.isArray(query)) {
+        data.data = query.reduce(function find(memo, q) {
+          memo[q] = dot.get(result, q);
+          return memo;
+        }, {});
+      }
 
-      content = temper.fetch(pagelet.error).server(pagelet.merge(result, {
-        reason: 'Failed to render: '+ pagelet.name,
-        env: process.env.NODE_ENV || 'development',
-        message: e.message,
-        stack: e.stack,
-        error: e
-      }));
-    }
-
-    //
-    // Add queried parts of data, so the client-side script can use it.
-    //
-    if ('object' === typeof result && Array.isArray(query)) {
-      data.data = query.reduce(function find(memo, q) {
-        memo[q] = dot.get(result, q);
-        return memo;
-      }, {});
-    }
-
-    fragment(content);
+      fragment(content);
+    });
   });
-
-  return this;
 });
 
 /**
@@ -435,14 +460,14 @@ Pagelet.readable('connect', function connect(spark, next) {
   var pagelet = this;
 
   /**
-   * Create a new substream.
+   * Create a new Substream.
    *
-   * @param {Boolean} authorized Allowed to use this pagelet.
+   * @param {Boolean} enabled Allowed to use this pagelet.
    * @returns {Pagelet}
    * @api private
    */
-  function substream(authorized) {
-    if (!authorized) return next(new Error('Unauthorized to access this pagelet'));
+  return this.conditional(spark.request, [], function substream(enabled) {
+    if (!enabled) return next(new Error('Unauthorized to access this pagelet'));
 
     var stream = pagelet.substream = spark.substream(pagelet.name)
       , log = debug('pagelet:primus:'+ pagelet.name);
@@ -498,9 +523,7 @@ Pagelet.readable('connect', function connect(spark, next) {
 
     next(undefined, pagelet);
     return pagelet;
-  }
-
-  return this.authenticate(spark.request, substream);
+  });
 });
 
 /**
@@ -546,26 +569,38 @@ Pagelet.prototype.emits = function emits() {
  * Authenticate the Pagelet.
  *
  * @param {Request} req The HTTP request.
+ * @param {Function} list Array of possible alternate pagelets that take it's place.
  * @param {Function} fn The authorized callback.
  * @returns {Pagelet}
  * @api private
  */
-Pagelet.readable('authenticate', function authenticate(req, fn) {
+Pagelet.readable('conditional', function conditional(req, list, fn) {
   var pagelet = this;
 
-  if ('function' !== typeof this.authorize) {
-    fn(pagelet.authorized = true);
+  /**
+   * Callback for the `pagelet.if` function to see if we're enabled or disabled.
+   *
+   * @param {Boolean} value Are we enabled or disabled.
+   * @api private
+   */
+  function enabled(value) {
+    fn.call(pagelet, pagelet.active = value);
+  }
+
+  if ('boolean' === typeof this._active) {
+    fn(pagelet.active);
+  } else if ('function' !== typeof this.if) {
+    fn(pagelet.active = true);
   } else {
-    pagelet.authorize(req, function authorized(value) {
-      fn(pagelet.authorized = value);
-    });
+    if (pagelet.if.length === 2) pagelet.if(req, enabled);
+    else pagelet.if(req, list || [], enabled);
   }
 
   return pagelet;
 });
 
 /**
- * Call an rpc method.
+ * Call an RPC method.
  *
  * @param {Object} data The RPC call information.
  * @api private
@@ -597,6 +632,21 @@ Pagelet.readable('call', function calls(data) {
 });
 
 /**
+ * Destroy the pagelet and remove all the back references so it can be safely
+ * garbage collected.
+ *
+ * @api public
+ */
+Pagelet.readable('destroy', function destroy() {
+  if (this.substream) this.substream.end();
+
+  this.temper = null;
+  this.removeAllListeners();
+
+  return this;
+});
+
+/**
  * Helper function to resolve assets on the pagelet.
  *
  * @param {String|Array} keys Name(s) of the property, e.g. [css, js].
@@ -611,7 +661,10 @@ Pagelet.resolve = function resolve(keys, dir) {
   keys.forEach(function each(key) {
     if (!prototype[key]) return;
 
-    var stack = Array.isArray(prototype[key]) ? prototype[key] : [prototype[key]];
+    var stack = Array.isArray(prototype[key])
+      ? prototype[key]
+      : [prototype[key]];
+
     prototype[key] = stack.map(function map(file) {
       if (/^(http:|https:)?\/\//.test(file)) return file;
       return path.resolve(dir || prototype.directory, file);
@@ -656,12 +709,21 @@ Pagelet.on = function on(module) {
  * Optimize the prototypes of the Pagelet to reduce work when we're actually
  * serving the requests.
  *
- * @param {Function} hook Hook into optimize, function will be called with Pagelet.
+ * Options:
+ *
+ * - temper: A customn temper instance we want to use to compile the templates.
+ * - transform: Transformation callback so plugins can hook in the optimizer.
+ *
+ * @param {Object} options Optimization configuration.
+ * @param {Function} next Completion callback for async execution.
  * @returns {Pagelet}
  * @api private
  */
-Pagelet.optimize = function optimize(options) {
-  var prototype = this.prototype;
+Pagelet.optimize = function optimize(options, next) {
+  var prototype = this.prototype
+    , name = prototype.name
+    , async = false
+    , err;
 
   options = options || {};
   options.temper = options.temper || temper || (temper = new Temper()) ;
@@ -687,8 +749,21 @@ Pagelet.optimize = function optimize(options) {
   }
 
   if ('string' === typeof prototype.RPC) {
-    prototype.RPC = prototype.RPC.split(/[\s|\,]/);
+    prototype.RPC = prototype.RPC.split(/[\s|\,]+/);
   }
+
+  //
+  // Validate the existance of the RPC methods, this reduces possible typo's
+  //
+  prototype.RPC.forEach(function validate(method) {
+    if (!(method in prototype)) return err = new Error(
+      name +' is missing RPC function `'+ method +'` on prototype'
+    );
+
+    if ('function' !== typeof prototype[method]) return err = new Error(
+      name +'#'+ method +' is not function which is required for RPC usage'
+    );
+  });
 
   //
   // Allow plugins to hook in the transformation process, so emit it when
@@ -696,9 +771,12 @@ Pagelet.optimize = function optimize(options) {
   // "fixed" properties which later can be re-used again to restore
   // a generated instance to it's original state.
   //
-  if ('function' === typeof options.transform) {
-    options.transform(Pagelet);
+  if ('function' === typeof options.transform && !err) {
+    if (options.transform.length === 2) async = true;
+    options.transform(Pagelet, next);
   }
+
+  if (!async) process.nextTick(next.bind(next, err));
 
   return this;
 };
@@ -707,6 +785,7 @@ Pagelet.optimize = function optimize(options) {
  * Discover all pagelets recursive. Fabricate will create constructable instances
  * from the provided value of prototype.pagelets.
  *
+ * @param {Pagelet} parent Reference to the parent pagelet.
  * @return {Array} collection of pagelets instances.
  * @api public
  */

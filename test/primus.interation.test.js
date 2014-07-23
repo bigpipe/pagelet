@@ -53,8 +53,8 @@ describe('Pagelet', function () {
 
     it('returns an error if unauthorized', function (next) {
       var Authorized = Pagelet.extend({
-        authorize: function (req, authorized) {
-          authorized(false);
+        if: function conditional(req, enabled) {
+          enabled(false);
         }
       });
 

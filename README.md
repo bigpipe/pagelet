@@ -6,18 +6,29 @@
 
 ## Installation
 
-In all of the following code examples we assume that the `Pagelet` variable is
-either exposed as:
+There are two different ways of using Pagelet in your project. If you're already
+using the [BigPipe] framework you don't need to install anything as this module
+is exposed using:
+
+```js
+var Pagelet = require('bigpipe').Pagelet;
+```
+
+If you want to build stand-alone pagelets to be used in BigPipe or just want to
+use the Pagelet pattern in your application you need to install the module your
+self using:
+
+```
+npm install --save pagelet
+```
+
+And require it in your application as:
 
 ```js
 var Pagelet = require('pagelet');
 ```
 
-Or using the BigPipe framework:
-
-```js
-var Pagelet = require('bigpipe').Pagelet;
-```
+Which is also the code as we assume in all the examples in our documentation.
 
 ## Table of Contents
 
@@ -87,7 +98,7 @@ your code as the `Pagelet.on` method automatically does this for you.
 
 ### Pagelet.traverse
 
-Recusively find and construct all pagelets. Uses the
+Recursively find and construct all pagelets. Uses the
 [pagelets property](#pageletpagelets) to find additional child pagelets. Usually
 there is no need to call this manually. [BigPipe] will make sure all pagelets
 are recursively discovered. Traverse should be called with the name of the
@@ -95,6 +106,7 @@ parent pagelet, so each child has a proper reference.
 
 ```
 Pagelet.extend({
+  name: 'parent name',
   pagelets: {
     one: require('pagelet'),
     two: require('pagelet')
@@ -132,6 +144,28 @@ Page.extend({
 }).on(module);
 ```
 
+If you supplied the [Page] instance if a path to a folder of pagelet folders it
+will use the name of the folders:
+
+```js
+var Page = require('bigpipe').Page;
+
+Page.extend({
+  pagelets: './pagelets-folder'
+}).on(module);
+```
+```
+|- page.js
+|- pagelets-folder/
+   |
+   |- foo/
+   |- bar/
+   |- baz/
+```
+
+So in the example above you would have 3 pagelets with the names `foo`, `bar` and
+`baz`.
+
 ### Pagelet.streaming
 
 _optional:_ **writable, boolean**
@@ -142,6 +176,8 @@ data the resulting HTML will be used to only update the contents of the pagelet.
 
 If you want to opt-out of this with one form you can add a
 `data-pagelet-async="false"` attribute to the form element.
+
+**Default value**: `false`
 
 ```js
 Pagelet.extend({
@@ -161,6 +197,8 @@ client.
 The first argument that these functions receive is an error first style callback
 which is used to transfer the response back to the client. All other arguments
 will be the arguments that were used to call the method on the client.
+
+**Default value**: `[]`
 
  ```js
 Pagelet.extend({
@@ -188,6 +226,11 @@ Pagelet.extend({
 }).on(module);
 ```
 
+We currently support two different render modes:
+
+- **html**: Render HTML elements.
+- **svg**: Render SVG elements.
+
 ### Pagelet.fragment
 
 _optional:_ **writable, string**
@@ -201,23 +244,41 @@ Change `Pagelet.fragment` if you'd like to invoke render and generate custom out
 
 ```js
 Pagelet.extend({
-  fragment: '<div>pagelet::template</div>',
+  fragment: '<div>{pagelet:template}</div>',
 }).on(module);
 ```
+
+The received fragment can contain various of placeholders which will be replaced
+before the template is flushed to the browser. The following placeholders are
+supported:
+
+- `{pagelet:template}` This contains the rendered output of your specified view.
+- `{pagelet:name}` The name of pagelet we're currently rendering.
+- `{pagelet:data}` A JSON string blob of meta data about the pagelet which contains:
+  - `id`: String, A unique id of the pagelet that was rendered.
+  - `mode`: String, the render mode that you've configured.
+  - `rpc`: Array, names of the RPC methods.
+  - `remove`: Boolean, should this be removed from the DOM.
+  - `streaming`: Boolean, should we stream form submits
+  - `parent`: String, name of the parent pagelet.
+  - `hash`: Object, containing the MD5 hashes of the client view.
 
 ### Pagelet.remove
 
 _optional:_ **writable, boolean**
 
 This instructs our render engine to remove the pagelet placeholders from the DOM
-structure if we're unauthorized. This makes it easier to create conditional
-layouts without having to worry about DOM elements that are left behind.
+structure if we've got no pagelets available for it. This makes it easier to
+create conditional layouts without having to worry about DOM elements that are
+left behind.
 
 **Default value**: `true`
 
 ```js
 Pagelet.extend({
-  authorize: auth,
+  if: function conditional(req, next) { 
+    next(false); 
+  },
   remove: false
 }).on(module);
 ```
@@ -370,19 +431,26 @@ Pagelet.extend({
 }).on(module);
 ```
 
-### Pagelet.authorize()
+### Pagelet.if()
 
 _optional:_ **writable, function**
 
-There is the possibility to create private pagelets. These pagelets could require
-special permissions in your application in order to be used. An example of this
-would a special administrator UI element. When a pagelet is unauthorized it can
-be removed from DOM structure of the page. See [Pagelet: remove] for changing
-this behaviour.
+The `if` function allows you to build conditional pagelets. These pagelets will
+only be rendered if the supplied callback receives `true`. This can be used to
+build private pagelets like administrator pagelets that require special
+permissions in order to be shown seen.
 
-The authorize method receives 2 arguments:
+When used in [BigPipe] we take this concept even further as it's possible to set
+an array of pagelets that could be used in the placeholder. You could use to
+show login and logout buttons, sign up or getting starting pagelets or even
+start doing A/B testing with multiple pagelets! The possibilities are endless
+here.
 
+The supplied function receives 2 or 3 arguments:
 - req: The incoming HTTP requirement.
+- left: An array of pagelets that will tried if this pagelet callback resolves
+  to false. This is an optional argument, if you do no specify it your last
+  argument will be the completion callback that is listed below.
 - done: A completion callback which only accepts one argument, a boolean. If
   this boolean has been set to `true` the pagelet is authorized on the page and
   will be rendered as expected. When the argument evaluates as `false` (so also
@@ -391,8 +459,19 @@ The authorize method receives 2 arguments:
 
 ```js
 Pagelet.extend({
-  authorize: function authorize(req, done) {
+  if: function conditional(req, done) {
     done(true); // True indicates that the request is authorized for access.
+  }
+}).on(module);
+```
+
+Or with 3 arguments:
+
+```js
+Pagelet.extend({
+  if: function abtest(req, left, done) {
+    if (!left.length) return done(true);
+    done(Math.random() < 0.5);
   }
 }).on(module);
 ```
