@@ -696,12 +696,6 @@ Pagelet.on = function on(module) {
     ? path.resolve(dir, prototype.error)
     : path.resolve(__dirname, 'error.html');
 
-  //
-  // Map all dependencies to an absolute path or URL.
-  //
-  if (prototype.view) prototype.view = path.resolve(dir, prototype.view);
-  Pagelet.resolve.call(this, ['css', 'js', 'dependencies']);
-
   return module.exports = this;
 };
 
@@ -733,12 +727,18 @@ Pagelet.optimize = function optimize(options, next) {
   // Ensure we have a custom error page when we fail to render this fragment.
   //
   if (prototype.view) {
+    prototype.view = path.resolve(prototype.directory, prototype.view);
     options.temper.prefetch(prototype.view, prototype.engine);
   }
 
   if (prototype.error) {
     options.temper.prefetch(prototype.error, path.extname(prototype.error).slice(1));
   }
+
+  //
+  // Map all dependencies to an absolute path or URL.
+  //
+  Pagelet.resolve.call(this, ['css', 'js', 'dependencies']);
 
   //
   // Support lowercase variant of RPC
