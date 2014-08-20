@@ -705,7 +705,7 @@ Pagelet.on = function on(module) {
  *
  * Options:
  *
- * - temper: A customn temper instance we want to use to compile the templates.
+ * - temper: A custom temper instance we want to use to compile the templates.
  * - transform: Transformation callback so plugins can hook in the optimizer.
  *
  * @param {Object} options Optimization configuration.
