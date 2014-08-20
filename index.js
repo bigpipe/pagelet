@@ -773,7 +773,7 @@ Pagelet.optimize = function optimize(options, next) {
   //
   if ('function' === typeof options.transform && !err) {
     if (options.transform.length === 2) async = true;
-    options.transform(Pagelet, next);
+    options.transform(this, next);
   }
 
   if (!async) process.nextTick(next.bind(next, err));
