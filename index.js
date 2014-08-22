@@ -684,6 +684,9 @@ Pagelet.resolve = function resolve(keys, dir) {
  * }).on(module);
  * ```
  *
+ * The use of this function is for convenience and optional. Developers can
+ * choose to provide absolute paths to files.
+ *
  * @param {Module} module The reference to the module object.
  * @returns {Pagelet}
  * @api public
@@ -695,6 +698,16 @@ Pagelet.on = function on(module) {
   prototype.error = prototype.error
     ? path.resolve(dir, prototype.error)
     : path.resolve(__dirname, 'error.html');
+
+  //
+  // Map all dependencies to an absolute path or URL.
+  //
+  Pagelet.resolve.call(this, ['css', 'js', 'dependencies']);
+
+  //
+  // Resolve the view to make sure an absolute path is provided to Temper.
+  //
+  if (prototype.view) prototype.view = path.resolve(dir, prototype.view);
 
   return module.exports = this;
 };
@@ -723,14 +736,17 @@ Pagelet.optimize = function optimize(options, next) {
   options.temper = options.temper || temper || (temper = new Temper()) ;
 
   //
-  // Prefetch the template if a view is available.
-  // Ensure we have a custom error page when we fail to render this fragment.
+  // Prefetch the template if a view is available. Resolve the view
+  // to make sure an absolute path is provided to Temper.
   //
   if (prototype.view) {
     prototype.view = path.resolve(prototype.directory, prototype.view);
     options.temper.prefetch(prototype.view, prototype.engine);
   }
 
+  //
+  // Ensure we have a custom error page when we fail to render this fragment.
+  //
   if (prototype.error) {
     options.temper.prefetch(prototype.error, path.extname(prototype.error).slice(1));
   }
