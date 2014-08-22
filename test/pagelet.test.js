@@ -107,6 +107,20 @@ describe('Pagelet', function () {
       assume(P.prototype.dependencies[1]).to.equal(custom + '/fixtures/custom.js');
     });
 
+    it('removes undefined values from the array before processing', function () {
+      var Undef = P.extend({
+        dependencies: P.prototype.dependencies.concat(
+          undefined
+        )
+      });
+
+      assume(Undef.prototype.dependencies.length).to.equal(3);
+
+      Undef.resolve('dependencies', custom);
+      assume(Undef.prototype.dependencies.length).to.equal(2);
+      assume(Undef.prototype.dependencies).to.not.include(undefined);
+    });
+
     it('can be overriden', function () {
       P.resolve = function () {
         throw new Error('fucked');

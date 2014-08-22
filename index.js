@@ -665,7 +665,7 @@ Pagelet.resolve = function resolve(keys, dir) {
       ? prototype[key]
       : [prototype[key]];
 
-    prototype[key] = stack.map(function map(file) {
+    prototype[key] = stack.filter(Boolean).map(function map(file) {
       if (/^(http:|https:)?\/\//.test(file)) return file;
       return path.resolve(dir || prototype.directory, file);
     });
