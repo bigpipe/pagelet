@@ -54,6 +54,13 @@ describe('Pagelet', function () {
       assume(pagelet.prototype.directory).to.equal(__dirname);
     });
 
+    it('resolves the view', function () {
+      assume(P.prototype.view).to.equal('fixtures/view.html');
+
+      P.on(module);
+      assume(P.prototype.view).to.equal(__dirname +'/fixtures/view.html');
+    });
+
     it('resolves the `error` view');
     it('resolves the `css` files in to an array');
     it('resolves the `js` files in to an array');
