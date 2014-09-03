@@ -61,6 +61,18 @@ describe('Pagelet', function () {
       assume(P.prototype.view).to.equal(__dirname +'/fixtures/view.html');
     });
 
+    it('still allows extending', function () {
+      assume(P.prototype.css).to.be.a('string');
+
+      P.on(module);
+      assume(P.prototype.css).to.be.a('array');
+
+      var Y = P.extend({ foo: 'bar' });
+      Y.optimize();
+
+      assume(Y.prototype.view).to.equal(__dirname +'/fixtures/view.html');
+    });
+
     it('resolves the `error` view');
     it('resolves the `css` files in to an array');
     it('resolves the `js` files in to an array');

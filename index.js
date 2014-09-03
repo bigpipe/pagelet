@@ -792,7 +792,7 @@ Pagelet.optimize = function optimize(options, next) {
     options.transform(this, next);
   }
 
-  if (!async) process.nextTick(next.bind(next, err));
+  if (!async && next) process.nextTick(next.bind(next, err));
 
   return this;
 };
