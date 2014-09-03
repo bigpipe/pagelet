@@ -732,6 +732,11 @@ Pagelet.optimize = function optimize(options, next) {
     , async = false
     , err;
 
+  if ('function' === typeof options) {
+    next = options;
+    options = null;
+  }
+
   options = options || {};
   options.temper = options.temper || temper || (temper = new Temper()) ;
 
@@ -792,7 +797,7 @@ Pagelet.optimize = function optimize(options, next) {
     options.transform(this, next);
   }
 
-  if (!async && next) process.nextTick(next.bind(next, err));
+  if (!async) process.nextTick(next.bind(next, err));
 
   return this;
 };

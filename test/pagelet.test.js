@@ -61,16 +61,17 @@ describe('Pagelet', function () {
       assume(P.prototype.view).to.equal(__dirname +'/fixtures/view.html');
     });
 
-    it('still allows extending', function () {
+    it('still allows extending', function (next) {
       assume(P.prototype.css).to.be.a('string');
 
       P.on(module);
       assume(P.prototype.css).to.be.a('array');
 
       var Y = P.extend({ foo: 'bar' });
-      Y.optimize();
-
-      assume(Y.prototype.view).to.equal(__dirname +'/fixtures/view.html');
+      Y.optimize(function (err) {
+        assume(Y.prototype.view).to.equal(__dirname +'/fixtures/view.html');
+        next(err);
+      });
     });
 
     it('resolves the `error` view');
