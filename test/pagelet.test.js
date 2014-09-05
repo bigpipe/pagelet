@@ -54,6 +54,26 @@ describe('Pagelet', function () {
       assume(pagelet.prototype.directory).to.equal(__dirname);
     });
 
+    it('resolves the view', function () {
+      assume(P.prototype.view).to.equal('fixtures/view.html');
+
+      P.on(module);
+      assume(P.prototype.view).to.equal(__dirname +'/fixtures/view.html');
+    });
+
+    it('still allows extending', function (next) {
+      assume(P.prototype.css).to.be.a('string');
+
+      P.on(module);
+      assume(P.prototype.css).to.be.a('array');
+
+      var Y = P.extend({ foo: 'bar' });
+      Y.optimize(function (err) {
+        assume(Y.prototype.view).to.equal(__dirname +'/fixtures/view.html');
+        next(err);
+      });
+    });
+
     it('resolves the `error` view');
     it('resolves the `css` files in to an array');
     it('resolves the `js` files in to an array');
@@ -105,6 +125,20 @@ describe('Pagelet', function () {
       assume(P.prototype.dependencies[0]).to.not.include(custom);
       assume(P.prototype.dependencies[0]).to.equal('http://code.jquery.com/jquery-2.0.0.js');
       assume(P.prototype.dependencies[1]).to.equal(custom + '/fixtures/custom.js');
+    });
+
+    it('removes undefined values from the array before processing', function () {
+      var Undef = P.extend({
+        dependencies: P.prototype.dependencies.concat(
+          undefined
+        )
+      });
+
+      assume(Undef.prototype.dependencies.length).to.equal(3);
+
+      Undef.resolve('dependencies', custom);
+      assume(Undef.prototype.dependencies.length).to.equal(2);
+      assume(Undef.prototype.dependencies).to.not.include(undefined);
     });
 
     it('can be overriden', function () {

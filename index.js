@@ -665,7 +665,7 @@ Pagelet.resolve = function resolve(keys, dir) {
       ? prototype[key]
       : [prototype[key]];
 
-    prototype[key] = stack.map(function map(file) {
+    prototype[key] = stack.filter(Boolean).map(function map(file) {
       if (/^(http:|https:)?\/\//.test(file)) return file;
       return path.resolve(dir || prototype.directory, file);
     });
@@ -684,6 +684,9 @@ Pagelet.resolve = function resolve(keys, dir) {
  * }).on(module);
  * ```
  *
+ * The use of this function is for convenience and optional. Developers can
+ * choose to provide absolute paths to files.
+ *
  * @param {Module} module The reference to the module object.
  * @returns {Pagelet}
  * @api public
@@ -695,6 +698,16 @@ Pagelet.on = function on(module) {
   prototype.error = prototype.error
     ? path.resolve(dir, prototype.error)
     : path.resolve(__dirname, 'error.html');
+
+  //
+  // Map all dependencies to an absolute path or URL.
+  //
+  Pagelet.resolve.call(this, ['css', 'js', 'dependencies']);
+
+  //
+  // Resolve the view to make sure an absolute path is provided to Temper.
+  //
+  if (prototype.view) prototype.view = path.resolve(dir, prototype.view);
 
   return module.exports = this;
 };
