@@ -15,6 +15,11 @@ var jstringify = require('json-stringify-safe')
 var slice = Array.prototype.slice
   , temper;
 
+//
+// Methods that needs data buffering.
+//
+var operations = 'POST, PUT, DELETE, PATCH'.toLowerCase().split(', ');
+
 /**
  * Simple helper function to generate some what unique id's for given
  * constructed pagelet.
@@ -34,6 +39,8 @@ function generator() {
  * @api public
  */
 function Pagelet(options) {
+  if (!(this instanceof Pagelet)) return new Pagelet(options);
+
   this.fuse();
 
   options = options || {};
@@ -49,6 +56,11 @@ function Pagelet(options) {
   // is called by just checking the name of it.
   //
   this.readable('debug', debug('pagelet:'+ this.name));
+
+  //
+  // Only configure if we have req/res.
+  //
+  if (options.req && options.res) this.configure(options.req, options.res);
 }
 
 fuse(Pagelet, Stream, { emits: false });
@@ -61,6 +73,49 @@ fuse(Pagelet, Stream, { emits: false });
  * @public
  */
 Pagelet.writable('name', '');
+
+/**
+ * The HTTP pathname that we should be matching against.
+ *
+ * @type {String|RegExp}
+ * @public
+ */
+Pagelet.writable('path', '/');
+
+/**
+ * <meta> character set for pagelet. Setting this to null will not include the meta
+ * charset. However this is not advised as this will reduce performance.
+ *
+ * @type {String}
+ * @public
+ */
+Pagelet.writable('charset', 'UTF-8');
+
+/**
+ * The Content-Type of the response. This defaults to text/html with a charset
+ * preset. The charset does not inherit it's value from the `charset` option.
+ *
+ * @type {String}
+ * @public
+ */
+Pagelet.writable('contentType', 'text/html; charset=UTF-8');
+
+/**
+ * Which HTTP methods should this pagelet accept. It can be a comma
+ * separated string or an array.
+ *
+ * @type {String|Array}
+ * @public
+ */
+Pagelet.writable('method', 'GET');
+
+/**
+ * The default status code that we should send back to the user.
+ *
+ * @type {Number}
+ * @public
+ */
+Pagelet.writable('statusCode', 200);
 
 /**
  * When enabled we will stream the submit of each form that is within a Pagelet
@@ -105,7 +160,65 @@ Pagelet.writable('RPC', []);
  * @type {String}
  * @public
  */
-Pagelet.writable('mode', 'html');
+Pagelet.writable('namespace', 'html');
+
+/**
+ * With what kind of generation mode do we need to output the generated
+ * pagelets. We're supporting 3 different modes:
+ *
+ * - sync:      Fully render the page without any fancy flushing.
+ * - async:     Render all pagelets async and flush them as fast as possible.
+ * - pipeline:  Same as async but in the specified order.
+ *
+ * @type {String}
+ * @public
+ */
+Pagelet.writable('mode', 'async');
+
+/**
+ * The location of the base template.
+ *
+ * @type {String}
+ * @public
+ */
+Pagelet.writable('view', '');
+
+/**
+ * Optional template engine preference. Useful when we detect the wrong template
+ * engine based on the view's file name.
+ *
+ * @type {String}
+ * @public
+ */
+Pagelet.writable('engine', '');
+
+/**
+ * Save the location where we got our resources from, this will help us with
+ * fetching assets from the correct location.
+ *
+ * @type {String}
+ * @public
+ */
+Pagelet.writable('directory', '');
+
+/**
+ * The environment that we're running this pagelet in. If this is set to
+ * `development` It would be verbose.
+ *
+ * @type {String}
+ * @public
+ */
+Pagelet.writable('env', (process.env.NODE_ENV || 'development').toLowerCase());
+
+/**
+ * Provide dynamic data to the view or static object. The data will be merged
+ * by dispatch right before rendering the view. The function will be supplied
+ * with callback, e.g. function data(next) { ... }
+ *
+ * @type {Function}
+ * @public
+ */
+Pagelet.writable('data', {});
 
 /**
  * Conditionally load this pagelet. It can also be used authorization handler.
@@ -264,6 +377,102 @@ Pagelet.writable('directory', '');
  */
 Pagelet.writable('get', function get(done) {
   (global.setImmediate || global.setTimeout)(done);
+});
+
+/**
+ * Reset the instance to it's original state and initialize it.
+ *
+ * @param {ServerRequest} req HTTP server request.
+ * @param {ServerResponse} res HTTP server response.
+ * @api private
+ */
+Pagelet.readable('configure', function configure(req, res) {
+  this.req = req;
+  this.res = res;
+
+  //
+  // Emit a page configuration event so plugins can hook in to this.
+  //
+  this.pipe.emit('page:configure', this);
+  res.once('close', this.emits('close'));
+
+  //
+  // If we have a `no_pagelet_js` flag, we should force a different
+  // rendering mode. This parameter is automatically added when we've
+  // detected that someone is browsing the site without JavaScript enabled.
+  //
+  // In addition to that, the other render modes only work if your browser
+  // supports trailing headers which where introduced in HTTP 1.1 so we need
+  // to make sure that this is something that the browser understands.
+  // Instead of checking just for `1.1` we want to make sure that it just
+  // tests for every http version above 1.0 as http 2.0 is just around the
+  // corner.
+  //
+  if (
+       'no_pagelet_js' in req.query && +req.query.no_pagelet_js === 1
+    || !(req.httpVersionMajor >= 1 && req.httpVersionMinor >= 1)
+  ) {
+    this.debug('forcing `sync` instead of %s due lack of HTTP 1.1 or JS', this.mode);
+    this.mode = 'sync';
+  }
+
+  if (this.initialize) {
+    if (this.initialize.length) {
+      this.debug('Waiting for `initialize` method before rendering');
+      this.initialize(this.render.bind(this));
+    } else {
+      this.initialize();
+      this.render();
+    }
+  } else {
+    this.render();
+  }
+
+  return this;
+});
+
+/**
+ * Get and initialize a given child Pagelet.
+ *
+ * @param {String} name Name of the child pagelet.
+ * @returns {Array} The pagelet instances.
+ * @api public
+ */
+Pagelet.readable('child', function child(name) {
+  if (Array.isArray(name)) name = name[0];
+  return (this.has(name) || this.has(name, true) || []).slice(0);
+});
+
+/**
+ * Helper to check if the pagelet has a child pagelet by name, must use
+ * prototype.name since pagelets are not always constructed yet.
+ *
+ * @param {String} name Name of the pagelet.
+ * @param {String} enabled Make sure that we use the enabled array.
+ * @returns {Array} The constructors of matching Pagelets.
+ * @api public
+ */
+Pagelet.readable('has', function has(name, enabled) {
+  if (!name) return [];
+
+  if (enabled) return this.enabled.filter(function filter(pagelet) {
+    return pagelet.name === name;
+  });
+
+  var pagelets = this.pagelets
+    , i = pagelets.length
+    , pagelet;
+
+  while (i--) {
+    pagelet = pagelets[i][0];
+
+    if (
+       pagelet.prototype && pagelet.prototype.name === name
+    || pagelets.name === name
+    ) return pagelets[i];
+  }
+
+  return [];
 });
 
 /**
@@ -599,6 +808,7 @@ Pagelet.readable('conditional', function conditional(req, list, fn) {
   return pagelet;
 });
 
+
 /**
  * Call an RPC method.
  *
@@ -693,7 +903,7 @@ Pagelet.resolve = function resolve(keys, dir) {
  */
 Pagelet.on = function on(module) {
   var prototype = this.prototype
-    , dir = prototype.directory = path.dirname(module.filename);
+    , dir = prototype.directory = prototype.directory || path.dirname(module.filename);
 
   prototype.error = prototype.error
     ? path.resolve(dir, prototype.error)
