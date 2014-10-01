@@ -92,7 +92,7 @@ Pagelet.writable('name', '');
  * @type {String|RegExp}
  * @public
  */
-Pagelet.writable('path', '/');
+Pagelet.writable('path', null);
 
 /**
  * <meta> character set for pagelet. Setting this to null will not include the meta
@@ -194,14 +194,6 @@ Pagelet.writable('namespace', 'html');
  * @public
  */
 Pagelet.writable('mode', 'async');
-
-/**
- * The location of the base template.
- *
- * @type {String}
- * @public
- */
-Pagelet.writable('view', '');
 
 /**
  * Optional template engine preference. Useful when we detect the wrong template
@@ -606,7 +598,6 @@ Pagelet.readable('discover', function discover() {
       var Child = children.shift()
         , test = new Pagelet({ pipe: pagelet.pipe });
 
-      test.init({ page: page });
       test.conditional(req, children, function conditionally(accepted) {
         if (last && last.destroy) last.destroy();
 
@@ -702,20 +693,20 @@ Pagelet.readable('async', function render(err, data) {
   var pagelet = this;
 
   this.once('discover', function discovered() {
-    async.each(this.enabled.concat(this.disabled), function (pagelet, next) {
-      page.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
+    async.each(pagelet.enabled.concat(pagelet.disabled), function (pagelet, next) {
+      pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
 
-      data = page.compiler.pagelet(pagelet, pagelet.streaming);
-      data.processed = ++page.n;
+      data = pagelet.pipe.compiler.pagelet(pagelet, pagelet.streaming);
+      data.processed = ++pagelet.n;
 
       pagelet.render({
         data: data
       }, function rendered(err, content) {
         if (err) return next(err);
 
-        page.write(content, next);
+        pagelet.pipe.write(pagelet, content, next);
       });
-    }, this.pipe.end.bind(this.pipe, null, pagelet));
+    }, pagelet.pipe.end.bind(pagelet.pipe, null, pagelet));
   });
 
   this.pipe.bootstrap(undefined, this, data);
@@ -723,7 +714,6 @@ Pagelet.readable('async', function render(err, data) {
 
   return this.debug('Rendering the pagelets in `async` mode');
 });
-
 
 /**
  * Mode: pipeline
