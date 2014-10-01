@@ -42,12 +42,17 @@ function Pagelet(options) {
   if (!(this instanceof Pagelet)) return new Pagelet(options);
 
   this.fuse();
-
   options = options || {};
 
-  this.writable('_active', null);                         // Are we active.
-  this.writable('substream', null);                       // Substream from Primus.
-  this.writable('temper', options.temper || temper);      // Template parser.
+  this.readable('pipe', options.pipe);               // Actual pipe instance.
+
+  this.writable('req', null);                        // Incoming HTTP request.
+  this.writable('res', null);                        // Incoming HTTP response.
+  this.writable('enabled', []);                      // Contains all enabled pagelets.
+  this.writable('disabled', []);                     // Contains all disable pagelets.
+  this.writable('_active', null);                    // Are we active.
+  this.writable('substream', null);                  // Substream from Primus.
+  this.writable('temper', options.temper || temper); // Template parser.
 
   this.writable('id', options.id || [1, 1, 1, 1].map(generator).join('-'));
 
@@ -116,6 +121,14 @@ Pagelet.writable('method', 'GET');
  * @public
  */
 Pagelet.writable('statusCode', 200);
+
+/**
+ * The pagelets that need to be loaded as children of this pagelet.
+ *
+ * @type {Object}
+ * @public
+ */
+Pagelet.writable('pagelets', {});
 
 /**
  * When enabled we will stream the submit of each form that is within a Pagelet
@@ -476,6 +489,57 @@ Pagelet.readable('has', function has(name, enabled) {
 });
 
 /**
+ * Render execution flow.
+ *
+ * @api private
+ */
+Pagelet.readable('init', function init() {
+  var method = this.req.method.toLowerCase()
+    , pagelet = this;
+
+  //
+  // Only start reading the incoming POST request when we accept the incoming
+  // method for read operations. Render in a regular mode if we do not accept
+  // these requests.
+  //
+  if (~operations.indexOf(method)) {
+    var pagelets = this.child(this.req.query._pagelet)
+      , reader = this.pipe.read(pagelet);
+
+    this.debug('Processing %s request', method);
+
+    async.whilst(function work() {
+      return !!pagelets.length;
+    }, function process(next) {
+      var Pagelet = pagelets.shift()
+        , pagelet;
+
+      if (!(method in Pagelet.prototype)) return next();
+
+      pagelet = new Pagelet({ temper: page.temper });
+      pagelet.init({ page: page });
+
+      pagelet.conditional(page.req, pagelets, function allowed(accepted) {
+        if (!accepted) {
+          if (pagelet.destroy) pagelet.destroy();
+          return next();
+        }
+
+        reader.before(pagelet[method], pagelet);
+      });
+    }, function nothing() {
+      if (method in page) {
+        reader.before(page[method], page);
+      } else {
+        page[page.mode]();
+      }
+    });
+  } else {
+    this[this.mode]();
+  }
+});
+
+/**
  * A safe and fast(er) alternative to the `json-stringify-save` as uses the
  * replacer to make the transformation save. This is really costly for larger
  * JSON structures. We assume that all the JSON contains no cyclic references.
@@ -506,6 +570,168 @@ Pagelet.readable('stringify', function stringify(data, replacer) {
 //
 // !IMPORTANT
 //
+
+/**
+ * Discover pagelets that we're allowed to use.
+ *
+ * @returns {Page} fluent interface
+ * @api private
+ */
+Pagelet.readable('discover', function discover() {
+  if (!this.pagelets.length) return this.emit('discover');
+
+  var req = this.req
+    , pagelet = this;
+
+  //
+  // We need to do an async map/filter of the pagelets, in order to this as
+  // efficient as possible we're going to use a reduce.
+  //
+  async.reduce(this.pagelets, {
+    disabled: [],
+    enabled: []
+  }, function reduce(memo, children, next) {
+    children = children.slice(0);
+
+    var child, last;
+
+    async.whilst(function work() {
+      return children.length && !child;
+    }, function work(next) {
+      var Child = children.shift()
+        , test = new Pagelet({ temper: pagelet.pipe.temper });
+
+      test.init({ page: page });
+      test.conditional(req, children, function conditionally(accepted) {
+        if (last && last.destroy) last.destroy();
+
+        if (accepted) child = test;
+        else last = test;
+
+        next(!!child);
+      });
+    }, function found() {
+      if (child) memo.enabled.push(child);
+      else memo.disabled.push(last);
+
+      next(undefined, memo);
+    });
+  }, function discovered(err, children) {
+    pagelet.disabled = children.disabled;
+    pagelet.enabled = children.enabled;
+
+    pagelet.enabled.forEach(function initialize(pagelet) {
+      if ('function' === typeof pagelet.initialize) {
+        pagelet.initialize();
+      }
+    });
+
+    pagelet.debug('Initialized all allowed pagelets');
+    pagelet.emit('discover');
+  });
+});
+
+/**
+ * Mode: sync
+ * Output the pagelets fully rendered in the HTML template.
+ *
+ * @param {Error} err Failed to process POST.
+ * @param {Object} data Optional data from POST.
+ * @returns {Page} fluent interface.
+ * @api private
+ */
+Pagelet.readable('sync', function render(err, data) {
+  if (err) return this.end(err);
+
+  var pagelet = this;
+
+  //
+  // Because we're synchronously rendering the pagelets we need to discover
+  // which one's are enabled before we send the bootstrap code so it can include
+  // the CSS files of the enabled pagelets in the HEAD of the page so there is
+  // styling available.
+  //
+  this.once('discover', function discovered() {
+    this.bootstrap(undefined, data, function booted(err, view) {
+      var pagelets = page.enabled.concat(page.disabled);
+
+      async.map(pagelets, function each(pagelet, next) {
+        page.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
+
+        pagelet.render({ data: data }, next);
+      }, function done(err, data) {
+        if (err) return page.end(err);
+
+        pagelets.forEach(function forEach(pagelet, index) {
+          view = pagelet.inject(view, pagelet, data[index].view);
+        });
+
+        //
+        // We need to bump the page.n to the length of the enabled pagelets to
+        // trick the end function in to believing that ALL pagelets have been
+        // flushed and that it can clean write queue and close the connection as
+        // no more data is expected to arrive.
+        //
+        page.n = page.enabled.length;
+        page.queue.push(view);
+        page.end();
+      });
+    });
+  }).discover();
+
+  return this.debug('Rendering the pagelets in `sync` mode');
+});
+
+/**
+ * Mode: Async
+ * Output the pagelets as fast as possible.
+ *
+ * @param {Error} err Failed to process POST.
+ * @param {Object} data Optional data from POST.
+ * @returns {Page} fluent interface.
+ * @api private
+ */
+Pagelet.readable('async', function render(err, data) {
+  if (err) return this.end(err);
+
+  var page = this;
+
+  this.once('discover', function discovered() {
+    async.each(this.enabled.concat(this.disabled), function (pagelet, next) {
+      page.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
+
+      data = page.compiler.pagelet(pagelet, pagelet.streaming);
+      data.processed = ++page.n;
+
+      pagelet.render({
+        data: data
+      }, function rendered(err, content) {
+        if (err) return next(err);
+
+        page.write(content, next);
+      });
+    }, this.end.bind(this));
+  });
+
+  this.bootstrap(undefined, data);
+  this.discover();
+
+  return this.debug('Rendering the pagelets in `async` mode');
+});
+
+
+/**
+ * Mode: pipeline
+ * Output the pagelets as fast as possible but in order.
+ *
+ * @param {Error} err Failed to process POST.
+ * @param {Object} data Optional data from POST.
+ * @returns {Page} fluent interface.
+ * @api private
+ */
+Pagelet.readable('pipeline', function render(err, data) {
+  throw new Error('Not Implemented');
+});
 
 /**
  * Checks if we're an active Pagelet or if we still need to a do an check
@@ -655,6 +881,50 @@ Pagelet.readable('render', function render(options, fn) {
       fragment(content);
     });
   });
+});
+
+/**
+ * Inject the output of a template directly in to view's pagelet placeholder
+ * element.
+ *
+ * @TODO remove pagelet's that have `authorized` set to `false`
+ * @TODO Also write the CSS and JavaScript.
+ *
+ * @param {String} base The template where we need to inject in to.
+ * @param {Pagelet} pagelet The pagelet instance we're rendering
+ * @param {String} view The generated pagelet view.
+ * @returns {String} updated base template
+ * @api private
+ */
+Pagelet.readable('inject', function inject(base, view) {
+  var name = this.name;
+
+  [
+    "data-pagelet='"+ name +"'",
+    'data-pagelet="'+ name +'"',
+    'data-pagelet='+ name,
+  ].forEach(function locate(attribute) {
+    var index = base.indexOf(attribute)
+      , end;
+
+    //
+    // As multiple versions of the pagelet can be included in to one single
+    // page we need to search for multiple occurrences of the `data-pagelet`
+    // attribute.
+    //
+    while (~index) {
+      end = base.indexOf('>', index);
+
+      if (~end) {
+        base = base.slice(0, end + 1) + view + base.slice(end + 1);
+        index = end + 1 + view.length;
+      }
+
+      index = base.indexOf(attribute, index + 1);
+    }
+  });
+
+  return base;
 });
 
 /**
