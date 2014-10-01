@@ -5,15 +5,14 @@ var jstringify = require('json-stringify-safe')
   , debug = require('diagnostics')
   , dot = require('dot-component')
   , Stream = require('stream')
-  , Temper = require('temper')
   , fuse = require('fusing')
+  , async = require('async')
   , path = require('path');
 
 //
 // Cache long prototype lookups to increase speed + write shorter code.
 //
-var slice = Array.prototype.slice
-  , temper;
+var slice = Array.prototype.slice;
 
 //
 // Methods that needs data buffering.
@@ -44,23 +43,31 @@ function Pagelet(options) {
   this.fuse();
   options = options || {};
 
-  this.readable('pipe', options.pipe);               // Actual pipe instance.
+  var writable = this.writable
+    , readable = this.readable;
 
-  this.writable('req', null);                        // Incoming HTTP request.
-  this.writable('res', null);                        // Incoming HTTP response.
-  this.writable('enabled', []);                      // Contains all enabled pagelets.
-  this.writable('disabled', []);                     // Contains all disable pagelets.
-  this.writable('_active', null);                    // Are we active.
-  this.writable('substream', null);                  // Substream from Primus.
-  this.writable('temper', options.temper || temper); // Template parser.
+  readable('pipe', options.pipe);               // Actual pipe instance.
 
-  this.writable('id', options.id || [1, 1, 1, 1].map(generator).join('-'));
+  writable('n', 0);                             // Number of processed pagelets.
+  writable('queue', []);                        // Write queue that will be flushed.
+  writable('req', null);                        // Incoming HTTP request.
+  writable('res', null);                        // Incoming HTTP response.
+  writable('params', {});                       // Params extracted from the route.
+  writable('enabled', []);                      // Contains all enabled pagelets.
+  writable('disabled', []);                     // Contains all disable pagelets.
+  writable('ended', false);                     // Is the page ended.
+  writable('_active', null);                    // Are we active.
+  writable('flushed', false);                   // Is the queue flushed.
+  writable('substream', null);                  // Substream from Primus.
+
+  writable('temper', options.temper || this.pipe.temper);
+  writable('id', options.id || [1, 1, 1, 1].map(generator).join('-'));
 
   //
   // Add an correctly namespaced debug method so it easier to see which pagelet
   // is called by just checking the name of it.
   //
-  this.readable('debug', debug('pagelet:'+ this.name));
+  readable('debug', debug('pagelet:'+ this.name));
 
   //
   // Only configure if we have req/res.
@@ -432,13 +439,13 @@ Pagelet.readable('configure', function configure(req, res) {
   if (this.initialize) {
     if (this.initialize.length) {
       this.debug('Waiting for `initialize` method before rendering');
-      this.initialize(this.render.bind(this));
+      this.initialize(this.init.bind(this));
     } else {
       this.initialize();
-      this.render();
+      this.init();
     }
   } else {
-    this.render();
+    this.init();
   }
 
   return this;
@@ -512,26 +519,24 @@ Pagelet.readable('init', function init() {
       return !!pagelets.length;
     }, function process(next) {
       var Pagelet = pagelets.shift()
-        , pagelet;
+        , child;
 
       if (!(method in Pagelet.prototype)) return next();
 
-      pagelet = new Pagelet({ temper: page.temper });
-      pagelet.init({ page: page });
-
-      pagelet.conditional(page.req, pagelets, function allowed(accepted) {
+      child = new Pagelet({ temper: pagelet.temper });
+      child.conditional(page.req, pagelets, function allowed(accepted) {
         if (!accepted) {
-          if (pagelet.destroy) pagelet.destroy();
+          if (child.destroy) child.destroy();
           return next();
         }
 
-        reader.before(pagelet[method], pagelet);
+        reader.before(child[method], child);
       });
     }, function nothing() {
-      if (method in page) {
-        reader.before(page[method], page);
+      if (method in pagelet) {
+        reader.before(pagelet[method], pagelet);
       } else {
-        page[page.mode]();
+        pagelet[pagelet.mode]();
       }
     });
   } else {
@@ -599,7 +604,7 @@ Pagelet.readable('discover', function discover() {
       return children.length && !child;
     }, function work(next) {
       var Child = children.shift()
-        , test = new Pagelet({ temper: pagelet.pipe.temper });
+        , test = new Pagelet({ pipe: pagelet.pipe });
 
       test.init({ page: page });
       test.conditional(req, children, function conditionally(accepted) {
@@ -652,7 +657,7 @@ Pagelet.readable('sync', function render(err, data) {
   // styling available.
   //
   this.once('discover', function discovered() {
-    this.bootstrap(undefined, data, function booted(err, view) {
+    pagelet.pipe.bootstrap(undefined, data, pagelet, function booted(err, view) {
       var pagelets = page.enabled.concat(page.disabled);
 
       async.map(pagelets, function each(pagelet, next) {
@@ -694,7 +699,7 @@ Pagelet.readable('sync', function render(err, data) {
 Pagelet.readable('async', function render(err, data) {
   if (err) return this.end(err);
 
-  var page = this;
+  var pagelet = this;
 
   this.once('discover', function discovered() {
     async.each(this.enabled.concat(this.disabled), function (pagelet, next) {
@@ -710,10 +715,10 @@ Pagelet.readable('async', function render(err, data) {
 
         page.write(content, next);
       });
-    }, this.end.bind(this));
+    }, this.pipe.end.bind(this.pipe, null, pagelet));
   });
 
-  this.bootstrap(undefined, data);
+  this.pipe.bootstrap(undefined, this, data);
   this.discover();
 
   return this.debug('Rendering the pagelets in `async` mode');
@@ -823,7 +828,7 @@ Pagelet.readable('render', function render(options, fn) {
     return pagelet;
   }
 
-  return this.conditional(this.page.req, options.pagelets, function auth(enabled) {
+  return this.conditional(this.req, options.pagelets, function auth(enabled) {
     if (!enabled) return fragment('');
 
     //
