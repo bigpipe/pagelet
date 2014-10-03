@@ -233,17 +233,17 @@ Pagelet.writable('env', (process.env.NODE_ENV || 'development').toLowerCase());
 Pagelet.writable('data', {});
 
 /**
- * Conditionally load this pagelet. It can also be used authorization handler.
+ * Conditionally load this pagelet. It can also be used as authorization handler.
  * If the incoming request is not authorized you can prevent this pagelet from
  * showing. The assigned function receives 3 arguments.
  *
  * - req, the http request that initialized the pagelet
- * - list, array of pagelets that will be tried if this pagelet
+ * - list, array of pagelets that will be tried
  * - done, a callback function that needs to be called with only a boolean.
  *
  * ```js
  * Pagelet.extend({
- *   if: function conditional(req, left, done) {
+ *   if: function conditional(req, list, done) {
  *     done(true); // True indicates that the request is authorized for access.
  *   }
  * });
