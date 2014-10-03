@@ -597,7 +597,7 @@ Pagelet.readable('discover', function discover() {
       return children.length && !child;
     }, function work(next) {
       var Child = children.shift()
-        , test = new Pagelet({
+        , test = new Child({
             pipe: pagelet.pipe,
             res: res,
             req: req
