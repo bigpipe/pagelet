@@ -1210,8 +1210,8 @@ Pagelet.traverse = function traverse(parent) {
   pagelets = fabricate(pagelets, {
     source: this.prototype.directory,
     recursive: 'string' === typeof pagelets
-  }).forEach(function each(Pagelet) {
-    log('Recursive discovery of child pagelets');
+  }).map(function each(Pagelet) {
+    log('Recursive discovery of child pagelet %s', Pagelet.prototype.name);
 
     //
     // We need to extend the pagelet if it already has a _parent name reference
