@@ -578,6 +578,7 @@ Pagelet.readable('discover', function discover() {
   if (!this.pagelets.length) return this.emit('discover');
 
   var req = this.req
+    , res = this.res
     , pagelet = this;
 
   //
@@ -596,7 +597,11 @@ Pagelet.readable('discover', function discover() {
       return children.length && !child;
     }, function work(next) {
       var Child = children.shift()
-        , test = new Pagelet({ pipe: pagelet.pipe });
+        , test = new Pagelet({
+            pipe: pagelet.pipe,
+            res: res,
+            req: req
+          });
 
       test.conditional(req, children, function conditionally(accepted) {
         if (last && last.destroy) last.destroy();
@@ -1197,14 +1202,16 @@ Pagelet.on = function on(module) {
  */
 Pagelet.traverse = function traverse(parent) {
   var pagelets = this.prototype.pagelets
-    , log = debug('bigpipe:pagelet')
-    , found = [this];
+    , log = debug('pagelet:'+ parent)
+    , found = [];
 
-  if (!pagelets) return found;
+  if (!parent || !pagelets) return found;
 
-  pagelets = fabricate(pagelets, { recursive: false });
-  pagelets.forEach(function each(Pagelet) {
-    log('Recursive discovery of child pagelets from %s', parent);
+  pagelets = fabricate(pagelets, {
+    source: this.prototype.directory,
+    recursive: 'string' === typeof pagelets
+  }).forEach(function each(Pagelet) {
+    log('Recursive discovery of child pagelets');
 
     //
     // We need to extend the pagelet if it already has a _parent name reference
@@ -1220,8 +1227,7 @@ Pagelet.traverse = function traverse(parent) {
     }
 
     Pagelet.prototype._parent = parent;
-
-    Array.prototype.push.apply(found, Pagelet.traverse(Pagelet.prototype.name));
+    found.push(Pagelet);
   });
 
   return found;
