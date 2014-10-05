@@ -405,8 +405,16 @@ Pagelet.readable('configure', function configure(req, res) {
   //
   // Emit a page configuration event so plugins can hook in to this.
   //
-  this.pipe.emit('page:configure', this);
+  this.pipe.emit('pagelet:configure', this);
   res.once('close', this.emits('close'));
+
+  //
+  // Child pagelet: do not bootstrap and discover allowed child pagelets.
+  //
+  if (this._parent) return this.debug(
+    'Skipping bootstrap and discovery, pagelet has parent %s',
+    this._parent
+  );
 
   //
   // If we have a `no_pagelet_js` flag, we should force a different
@@ -654,14 +662,14 @@ Pagelet.readable('sync', function render(err, data) {
   //
   this.once('discover', function discovered() {
     pagelet.pipe.bootstrap(undefined, data, pagelet, function booted(err, view) {
-      var pagelets = page.enabled.concat(page.disabled);
+      var pagelets = pagelet.enabled.concat(pagelet.disabled);
 
       async.map(pagelets, function each(pagelet, next) {
-        page.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
+        pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
 
         pagelet.render({ data: data }, next);
       }, function done(err, data) {
-        if (err) return page.end(err);
+        if (err) return pagelet.pipe.end(err, pagelet);
 
         pagelets.forEach(function forEach(pagelet, index) {
           view = pagelet.inject(view, pagelet, data[index].view);
@@ -673,9 +681,9 @@ Pagelet.readable('sync', function render(err, data) {
         // flushed and that it can clean write queue and close the connection as
         // no more data is expected to arrive.
         //
-        page.n = page.enabled.length;
-        page.queue.push(view);
-        page.end();
+        pagelet.n = pagelet.enabled.length;
+        pagelet.queue.push(view);
+        pagelet.pipe.end(null, pagelet);
       });
     });
   }).discover();
@@ -696,7 +704,6 @@ Pagelet.readable('async', function render(err, data) {
   if (err) return this.end(err);
 
   var pagelet = this;
-
   this.once('discover', function discovered() {
     async.each(pagelet.enabled.concat(pagelet.disabled), function (pagelet, next) {
       pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
