@@ -202,16 +202,6 @@ Pagelet.writable('directory', '');
 Pagelet.writable('env', (process.env.NODE_ENV || 'development').toLowerCase());
 
 /**
- * Provide dynamic data to the view or static object. The data will be merged
- * by dispatch right before rendering the view. The function will be supplied
- * with callback, e.g. function data(next) { ... }
- *
- * @type {Function}
- * @public
- */
-Pagelet.writable('data', {});
-
-/**
  * Conditionally load this pagelet. It can also be used as authorization handler.
  * If the incoming request is not authorized you can prevent this pagelet from
  * showing. The assigned function receives 3 arguments.
@@ -390,6 +380,12 @@ Pagelet.readable('configure', function configure(req, res) {
   res.queue = [];
   res.ended = false;
   res.flushed = false;
+
+  // @TODO rel prefetch for resources that are used on the next page?
+  // @TODO cache manifest.
+
+  this.res.statusCode = this.statusCode;
+  this.res.setHeader('Content-Type', this.contentType);
 
   //
   // Emit a pagelet configuration event so plugins can hook in to this.
@@ -642,7 +638,7 @@ Pagelet.readable('sync', function render(err, data) {
   // styling available.
   //
   this.once('discover', function discovered() {
-    pagelet.pipe.bootstrap(undefined, data, pagelet, function booted(err, view) {
+    pagelet.pipe.bootstrap(undefined, pagelet, function booted(err, view) {
       var pagelets = pagelet.enabled.concat(pagelet.disabled);
 
       async.map(pagelets, function each(pagelet, next) {
@@ -653,7 +649,7 @@ Pagelet.readable('sync', function render(err, data) {
         if (err) return pagelet.pipe.end(err, pagelet);
 
         pagelets.forEach(function forEach(pagelet, index) {
-          view = pagelet.inject(view, pagelet, data[index].view);
+          view = pagelet.inject(pagelet.name, view, data[index].view);
         });
 
         //
@@ -702,7 +698,7 @@ Pagelet.readable('async', function render(err, data) {
     }, pagelet.pipe.end.bind(pagelet.pipe, null, pagelet));
   });
 
-  this.pipe.bootstrap(undefined, this, data);
+  this.pipe.bootstrap(undefined, this);
   this.discover();
 
   return this.debug('Rendering the pagelets in `async` mode');
@@ -869,50 +865,6 @@ Pagelet.readable('render', function render(options, fn) {
       fragment(content);
     });
   });
-});
-
-/**
- * Inject the output of a template directly in to view's pagelet placeholder
- * element.
- *
- * @TODO remove pagelet's that have `authorized` set to `false`
- * @TODO Also write the CSS and JavaScript.
- *
- * @param {String} base The template where we need to inject in to.
- * @param {Pagelet} pagelet The pagelet instance we're rendering
- * @param {String} view The generated pagelet view.
- * @returns {String} updated base template
- * @api private
- */
-Pagelet.readable('inject', function inject(base, view) {
-  var name = this.name;
-
-  [
-    "data-pagelet='"+ name +"'",
-    'data-pagelet="'+ name +'"',
-    'data-pagelet='+ name,
-  ].forEach(function locate(attribute) {
-    var index = base.indexOf(attribute)
-      , end;
-
-    //
-    // As multiple versions of the pagelet can be included in to one single
-    // parent pagelet we need to search for multiple occurrences of the
-    // `data-pagelet` attribute.
-    //
-    while (~index) {
-      end = base.indexOf('>', index);
-
-      if (~end) {
-        base = base.slice(0, end + 1) + view + base.slice(end + 1);
-        index = end + 1 + view.length;
-      }
-
-      index = base.indexOf(attribute, index + 1);
-    }
-  });
-
-  return base;
 });
 
 /**
