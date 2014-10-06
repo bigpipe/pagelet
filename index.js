@@ -74,15 +74,6 @@ Pagelet.writable('name', '');
 Pagelet.writable('path', null);
 
 /**
- * <meta> character set for pagelet. Setting this to null will not include the meta
- * charset. However this is not advised as this will reduce performance.
- *
- * @type {String}
- * @public
- */
-Pagelet.writable('charset', 'UTF-8');
-
-/**
  * The Content-Type of the response. This defaults to text/html with a charset
  * preset. The charset does not inherit it's value from the `charset` option.
  *
@@ -629,7 +620,8 @@ Pagelet.readable('discover', function discover() {
 Pagelet.readable('sync', function render(err, data) {
   if (err) return this.end(err);
 
-  var pagelet = this;
+  var pagelet = this
+    , pagelets, view;
 
   //
   // Because we're synchronously rendering the pagelets we need to discover
@@ -638,30 +630,29 @@ Pagelet.readable('sync', function render(err, data) {
   // styling available.
   //
   this.once('discover', function discovered() {
-    pagelet.pipe.bootstrap(undefined, pagelet, function booted(err, view) {
-      var pagelets = pagelet.enabled.concat(pagelet.disabled);
+    view = pagelet.pipe.bootstrap(undefined, pagelet);
+    pagelets = pagelet.enabled.concat(pagelet.disabled);
 
-      async.map(pagelets, function each(pagelet, next) {
-        pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
+    async.map(pagelets, function each(pagelet, next) {
+      pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
 
-        pagelet.render({ data: data }, next);
-      }, function done(err, data) {
-        if (err) return pagelet.pipe.end(err, pagelet);
+      pagelet.render({ data: data }, next);
+    }, function done(err, data) {
+      if (err) return pagelet.pipe.end(err, pagelet);
 
-        pagelets.forEach(function forEach(pagelet, index) {
-          view = pagelet.inject(pagelet.name, view, data[index].view);
-        });
-
-        //
-        // We need to bump the pagelet.res.n to the length of the enabled pagelets
-        // to trick the end function in to believing that ALL pagelets have been
-        // flushed and that it can clean write queue and close the connection as
-        // no more data is expected to arrive.
-        //
-        pagelet.res.n = pagelet.enabled.length;
-        pagelet.res.queue.push(view);
-        pagelet.pipe.end(null, pagelet);
+      pagelets.forEach(function forEach(pagelet, index) {
+        view = pagelet.pip.inject(view, data[index].view, pagelet);
       });
+
+      //
+      // We need to bump the pagelet.res.n to the length of the enabled pagelets
+      // to trick the end function in to believing that ALL pagelets have been
+      // flushed and that it can clean write queue and close the connection as
+      // no more data is expected to arrive.
+      //
+      pagelet.res.n = pagelet.enabled.length;
+      pagelet.res.queue.push(view);
+      pagelet.pipe.end(null, pagelet);
     });
   }).discover();
 
@@ -698,7 +689,8 @@ Pagelet.readable('async', function render(err, data) {
     }, pagelet.pipe.end.bind(pagelet.pipe, null, pagelet));
   });
 
-  this.pipe.bootstrap(undefined, this);
+  this.res.queue.push(this.pipe.bootstrap(undefined, this));
+  this.pipe.flush(this, true);
   this.discover();
 
   return this.debug('Rendering the pagelets in `async` mode');
