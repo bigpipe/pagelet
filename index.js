@@ -20,17 +20,6 @@ var slice = Array.prototype.slice;
 var operations = 'POST, PUT, DELETE, PATCH'.toLowerCase().split(', ');
 
 /**
- * Simple helper function to generate some what unique id's for given
- * constructed pagelet.
- *
- * @returns {String}
- * @api private
- */
-function generator() {
-  return Math.random().toString(36).substring(2).toUpperCase();
-}
-
-/**
  * A pagelet is the representation of an item, section, column, widget on the
  * page. It's basically a small sand boxed application within your page.
  *
@@ -42,6 +31,7 @@ function Pagelet(options) {
 
   this.fuse();
   options = options || {};
+  options.temper = options.temper || options.pipe.temper;
 
   var writable = this.writable
     , readable = this.readable;
@@ -50,8 +40,6 @@ function Pagelet(options) {
 
   writable('n', 0);                             // Number of processed pagelets.
   writable('queue', []);                        // Write queue that will be flushed.
-  writable('req', null);                        // Incoming HTTP request.
-  writable('res', null);                        // Incoming HTTP response.
   writable('params', {});                       // Params extracted from the route.
   writable('enabled', []);                      // Contains all enabled pagelets.
   writable('disabled', []);                     // Contains all disable pagelets.
@@ -59,20 +47,15 @@ function Pagelet(options) {
   writable('_active', null);                    // Are we active.
   writable('flushed', false);                   // Is the queue flushed.
   writable('substream', null);                  // Substream from Primus.
-
-  writable('temper', options.temper || this.pipe.temper);
-  writable('id', options.id || [1, 1, 1, 1].map(generator).join('-'));
+  writable('req', options.req);                 // Incoming HTTP request.
+  writable('res', options.res);                 // Incoming HTTP response.
+  writable('temper', options.temper);           // Attach the Temper instance.
 
   //
   // Add an correctly namespaced debug method so it easier to see which pagelet
   // is called by just checking the name of it.
   //
   readable('debug', debug('pagelet:'+ this.name));
-
-  //
-  // Only configure if we have req/res.
-  //
-  if (options.req && options.res) this.configure(options.req, options.res);
 }
 
 fuse(Pagelet, Stream, { emits: false });
@@ -407,14 +390,6 @@ Pagelet.readable('configure', function configure(req, res) {
   //
   this.pipe.emit('pagelet:configure', this);
   res.once('close', this.emits('close'));
-
-  //
-  // Child pagelet: do not bootstrap and discover allowed child pagelets.
-  //
-  if (this._parent) return this.debug(
-    'Skipping bootstrap and discovery, pagelet has parent %s',
-    this._parent
-  );
 
   //
   // If we have a `no_pagelet_js` flag, we should force a different
