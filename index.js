@@ -20,8 +20,8 @@ var slice = Array.prototype.slice;
 var operations = 'POST, PUT, DELETE, PATCH'.toLowerCase().split(', ');
 
 /**
- * A pagelet is the representation of an item, section, column, widget on the
- * page. It's basically a small sand boxed application within your page.
+ * A pagelet is the representation of an item, section, column or widget.
+ * It's basically a small sandboxed application within your application.
  *
  * @constructor
  * @api public
@@ -38,14 +38,10 @@ function Pagelet(options) {
 
   readable('pipe', options.pipe);               // Actual pipe instance.
 
-  writable('n', 0);                             // Number of processed pagelets.
-  writable('queue', []);                        // Write queue that will be flushed.
   writable('params', {});                       // Params extracted from the route.
   writable('enabled', []);                      // Contains all enabled pagelets.
   writable('disabled', []);                     // Contains all disable pagelets.
-  writable('ended', false);                     // Is the page ended.
   writable('_active', null);                    // Are we active.
-  writable('flushed', false);                   // Is the queue flushed.
   writable('substream', null);                  // Substream from Primus.
   writable('req', options.req);                 // Incoming HTTP request.
   writable('res', options.res);                 // Incoming HTTP response.
@@ -169,7 +165,7 @@ Pagelet.writable('namespace', 'html');
  * With what kind of generation mode do we need to output the generated
  * pagelets. We're supporting 3 different modes:
  *
- * - sync:      Fully render the page without any fancy flushing.
+ * - sync:      Fully render without any fancy flushing of pagelets.
  * - async:     Render all pagelets async and flush them as fast as possible.
  * - pipeline:  Same as async but in the specified order.
  *
@@ -327,7 +323,7 @@ Pagelet.writable('engine', '');
 Pagelet.writable('css', '');
 
 /**
- * The JavaScript files needed for this page. The location can be a string or
+ * The JavaScript files needed for this pagelet. The location can be a string or
  * multiple paths in an array. This file needs to be included in order for
  * this pagelet to function.
  *
@@ -386,7 +382,17 @@ Pagelet.readable('configure', function configure(req, res) {
   this.res = res;
 
   //
-  // Emit a page configuration event so plugins can hook in to this.
+  // Set a number of properties on the response as it is available to all pagelets.
+  // This will ensure the correct amount of pagelets are processed and that the
+  // entire queue is written to the client.
+  //
+  res.n = 0;
+  res.queue = [];
+  res.ended = false;
+  res.flushed = false;
+
+  //
+  // Emit a pagelet configuration event so plugins can hook in to this.
   //
   this.pipe.emit('pagelet:configure', this);
   res.once('close', this.emits('close'));
@@ -493,13 +499,13 @@ Pagelet.readable('init', function init() {
     async.whilst(function work() {
       return !!pagelets.length;
     }, function process(next) {
-      var Pagelet = pagelets.shift()
+      var Child = pagelets.shift()
         , child;
 
       if (!(method in Pagelet.prototype)) return next();
 
-      child = new Pagelet({ temper: pagelet.temper });
-      child.conditional(page.req, pagelets, function allowed(accepted) {
+      child = new Child({ temper: pagelet.temper });
+      child.conditional(pagelet.req, pagelets, function allowed(accepted) {
         if (!accepted) {
           if (child.destroy) child.destroy();
           return next();
@@ -554,7 +560,7 @@ Pagelet.readable('stringify', function stringify(data, replacer) {
 /**
  * Discover pagelets that we're allowed to use.
  *
- * @returns {Page} fluent interface
+ * @returns {Pagelet} fluent interface
  * @api private
  */
 Pagelet.readable('discover', function discover() {
@@ -621,7 +627,7 @@ Pagelet.readable('discover', function discover() {
  *
  * @param {Error} err Failed to process POST.
  * @param {Object} data Optional data from POST.
- * @returns {Page} fluent interface.
+ * @returns {Pagelet} fluent interface.
  * @api private
  */
 Pagelet.readable('sync', function render(err, data) {
@@ -651,13 +657,13 @@ Pagelet.readable('sync', function render(err, data) {
         });
 
         //
-        // We need to bump the page.n to the length of the enabled pagelets to
-        // trick the end function in to believing that ALL pagelets have been
+        // We need to bump the pagelet.res.n to the length of the enabled pagelets
+        // to trick the end function in to believing that ALL pagelets have been
         // flushed and that it can clean write queue and close the connection as
         // no more data is expected to arrive.
         //
-        pagelet.n = pagelet.enabled.length;
-        pagelet.queue.push(view);
+        pagelet.res.n = pagelet.enabled.length;
+        pagelet.res.queue.push(view);
         pagelet.pipe.end(null, pagelet);
       });
     });
@@ -672,7 +678,7 @@ Pagelet.readable('sync', function render(err, data) {
  *
  * @param {Error} err Failed to process POST.
  * @param {Object} data Optional data from POST.
- * @returns {Page} fluent interface.
+ * @returns {Pagelet} fluent interface.
  * @api private
  */
 Pagelet.readable('async', function render(err, data) {
@@ -684,7 +690,7 @@ Pagelet.readable('async', function render(err, data) {
       pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
 
       data = pagelet.pipe.compiler.pagelet(pagelet, pagelet.streaming);
-      data.processed = ++pagelet.n;
+      data.processed = ++pagelet.res.n;
 
       pagelet.render({
         data: data
@@ -708,7 +714,7 @@ Pagelet.readable('async', function render(err, data) {
  *
  * @param {Error} err Failed to process POST.
  * @param {Object} data Optional data from POST.
- * @returns {Page} fluent interface.
+ * @returns {Pagelet} fluent interface.
  * @api private
  */
 Pagelet.readable('pipeline', function render(err, data) {
@@ -769,7 +775,7 @@ Pagelet.readable('render', function render(options, fn) {
 
     if (!active) content = '';
 
-    if (options.substream || pagelet.page && pagelet.page.mode === 'sync') {
+    if (options.substream || pagelet.mode === 'sync') {
       data.view = content;
       return fn.call(context, undefined, data);
     }
@@ -891,8 +897,8 @@ Pagelet.readable('inject', function inject(base, view) {
 
     //
     // As multiple versions of the pagelet can be included in to one single
-    // page we need to search for multiple occurrences of the `data-pagelet`
-    // attribute.
+    // parent pagelet we need to search for multiple occurrences of the
+    // `data-pagelet` attribute.
     //
     while (~index) {
       end = base.indexOf('>', index);
