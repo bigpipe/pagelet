@@ -372,6 +372,15 @@ Pagelet.readable('configure', function configure(req, res) {
   res.ended = false;
   res.flushed = false;
 
+  //
+  // Ensure this parent pagelet has a flag to let the client side library know it
+  // should append the content of this pagelet to the target container. This is
+  // required as the body will also have our code and script fragments for other
+  // pagelets. Simply overwriting that content would result in removal of the
+  // fragments of other pagelets.
+  //
+  this._append = true;
+
   // @TODO rel prefetch for resources that are used on the next page?
   // @TODO cache manifest.
 
@@ -774,6 +783,7 @@ Pagelet.readable('render', function render(options, fn) {
     data.remove = active ? false : pagelet.remove;        // Remove from DOM.
     data.streaming = !!pagelet.streaming;                 // Submit streaming.
     data.parent = pagelet._parent;                        // Send parent name along.
+    data.append = pagelet._append;                        // Content should be appended.
     data.hash = {
       error: temper.fetch(pagelet.error).hash.client,     // MD5 hash of error view.
       client: temper.fetch(pagelet.view).hash.client      // MD5 hash of client view.
