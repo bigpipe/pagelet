@@ -595,7 +595,7 @@ Pagelet.readable('discover', function discover() {
     });
   }, function discovered(err, children) {
     pagelet.disabled = children.disabled;
-    pagelet.enabled = children.enabled;
+    pagelet.enabled = children.enabled.concat(pagelet);
 
     pagelet.enabled.forEach(function initialize(pagelet) {
       if ('function' === typeof pagelet.initialize) {
