@@ -424,7 +424,7 @@ Pagelet.readable('configure', function configure(req, res) {
        'no_pagelet_js' in req.query && +req.query.no_pagelet_js === 1
     || !(req.httpVersionMajor >= 1 && req.httpVersionMinor >= 1)
   ) {
-    this.debug('forcing `sync` instead of %s due lack of HTTP 1.1 or JS', this.mode);
+    this.debug('Forcing `sync` instead of %s due lack of HTTP 1.1 or JS', this.mode);
     this.mode = 'sync';
   }
 
@@ -849,7 +849,7 @@ Pagelet.readable('render', function render(options, fn) {
       //
       try {
         if (err) {
-          pagelet.debug('render %s/%s resulted in a error', pagelet.name, pagelet.id, err);
+          pagelet.debug('Render %s/%s resulted in a error', pagelet.name, pagelet.id, err);
           throw err; // Throw so we can capture it again.
         }
 
