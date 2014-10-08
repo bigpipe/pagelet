@@ -382,12 +382,7 @@ Pagelet.readable('configure', function configure(req, res) {
   // TODO: do not simply add one to the length?
   //
   this.bootstrap = this.pipe.bootstrap(this, this.pagelets.bootstrap, {
-    length: this.pagelets.length + 1,    // Number of pagelets that should be written.
     dependencies: dependencies,
-    path: req.uri.pathname,
-    query: req.query,
-    mode: this.mode,                     // Mode of the current pagelet.
-    parent: this.name,
     res: res,
     req: req
   });
