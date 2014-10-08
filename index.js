@@ -108,6 +108,15 @@ Pagelet.writable('statusCode', 200);
 Pagelet.writable('pagelets', {});
 
 /**
+ * Reference to the bootstrap pagelet, which is also a state keeper for
+ * global request properties.
+ *
+ * @type {Object}
+ * @private
+ */
+Pagelet.writable('bootstrap', null);
+
+/**
  * When enabled we will stream the submit of each form that is within a Pagelet
  * to the server instead of using the default full page refreshes. After sending
  * the data the resulting HTML will be used to only update the contents of the
@@ -363,14 +372,25 @@ Pagelet.readable('configure', function configure(req, res) {
   this.res = res;
 
   //
-  // Set a number of properties on the response as it is available to all pagelets.
-  // This will ensure the correct amount of pagelets are processed and that the
-  // entire queue is written to the client.
+  // Add all required assets and dependencies to the HEAD of the page.
   //
-  res.n = 0;
-  res.queue = [];
-  res.ended = false;
-  res.flushed = false;
+  var dependencies = [];
+  this.pipe.compiler.page(this, dependencies);
+
+  //
+  // TODO: document why each property is provided.
+  // TODO: do not simply add one to the length?
+  //
+  this.bootstrap = this.pipe.bootstrap(this, this.pagelets.bootstrap, {
+    length: this.pagelets.length + 1,    // Number of pagelets that should be written.
+    dependencies: dependencies,
+    path: req.uri.pathname,
+    query: req.query,
+    mode: this.mode,                     // Mode of the current pagelet.
+    parent: this.name,
+    res: res,
+    req: req
+  });
 
   //
   // Ensure this parent pagelet has a flag to let the client side library know it
@@ -564,7 +584,8 @@ Pagelet.readable('discover', function discover() {
 
   var req = this.req
     , res = this.res
-    , pagelet = this;
+    , pagelet = this
+    , bootstrap = this.bootstrap;
 
   //
   // We need to do an async map/filter of the pagelets, in order to this as
@@ -607,6 +628,7 @@ Pagelet.readable('discover', function discover() {
     pagelet.enabled = children.enabled.concat(pagelet);
 
     pagelet.enabled.forEach(function initialize(pagelet) {
+      pagelet.bootstrap = bootstrap;
       if ('function' === typeof pagelet.initialize) {
         pagelet.initialize();
       }
@@ -680,13 +702,15 @@ Pagelet.readable('sync', function render(err, data) {
 Pagelet.readable('async', function render(err, data) {
   if (err) return this.end(err);
 
-  var pagelet = this;
+  var pagelet = this
+    , bootstrap = this.bootstrap;
+
   this.once('discover', function discovered() {
     async.each(pagelet.enabled.concat(pagelet.disabled), function (pagelet, next) {
       pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
 
       data = pagelet.pipe.compiler.pagelet(pagelet, pagelet.streaming);
-      data.processed = ++pagelet.res.n;
+      data.processed = ++bootstrap.n;
 
       pagelet.render({
         data: data
@@ -698,7 +722,7 @@ Pagelet.readable('async', function render(err, data) {
     }, pagelet.pipe.end.bind(pagelet.pipe, null, pagelet));
   });
 
-  this.res.queue.push(this.pipe.bootstrap(undefined, this));
+  bootstrap.queue.push(bootstrap.html());
   this.pipe.flush(this, true);
   this.discover();
 
