@@ -638,6 +638,9 @@ Pagelet.readable('discover', function discover() {
  * Mode: sync
  * Output the pagelets fully rendered in the HTML template.
  *
+ * @TODO remove pagelet's that have `authorized` set to `false`
+ * @TODO Also write the CSS and JavaScript.
+ *
  * @param {Error} err Failed to process POST.
  * @param {Object} data Optional data from POST.
  * @returns {Pagelet} fluent interface.
@@ -647,7 +650,8 @@ Pagelet.readable('sync', function render(err, data) {
   if (err) return this.end(err);
 
   var pagelet = this
-    , pagelets, view;
+    , bootstrap = this.bootstrap
+    , view = bootstrap.html();
 
   //
   // Because we're synchronously rendering the pagelets we need to discover
@@ -656,8 +660,7 @@ Pagelet.readable('sync', function render(err, data) {
   // styling available.
   //
   this.once('discover', function discovered() {
-    view = pagelet.pipe.bootstrap(undefined, pagelet);
-    pagelets = pagelet.enabled.concat(pagelet.disabled);
+    var pagelets = pagelet.enabled.concat(pagelet.disabled);
 
     async.map(pagelets, function each(pagelet, next) {
       pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
@@ -667,7 +670,7 @@ Pagelet.readable('sync', function render(err, data) {
       if (err) return pagelet.pipe.end(err, pagelet);
 
       pagelets.forEach(function forEach(pagelet, index) {
-        view = pagelet.pip.inject(view, data[index].view, pagelet);
+        view = pagelet.pipe.inject(view, data[index].view, pagelet);
       });
 
       //
@@ -676,8 +679,8 @@ Pagelet.readable('sync', function render(err, data) {
       // flushed and that it can clean write queue and close the connection as
       // no more data is expected to arrive.
       //
-      pagelet.res.n = pagelet.enabled.length;
-      pagelet.res.queue.push(view);
+      bootstrap.n = pagelet.enabled.length;
+      bootstrap.queue.push(view);
       pagelet.pipe.end(null, pagelet);
     });
   }).discover();
