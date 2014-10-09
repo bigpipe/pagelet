@@ -25,6 +25,7 @@
     "async": "0.9.x",
     "diagnostics": "0.0.x",
     "dot-component": "0.1.x",
+    "eventemitter3": "0.1.x",
     "fabricator": "0.4.x",
     "fusing": "0.3.x",
     "json-stringify-safe": "5.0.x",

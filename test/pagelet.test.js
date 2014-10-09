@@ -150,6 +150,52 @@ describe('Pagelet', function () {
     });
   });
 
+  describe('has readable instance properties', function () {
+    it('temper template compiler', function () {
+      var property = Object.getOwnPropertyDescriptor(page, 'temper');
+
+      expect(page).to.have.property('temper');
+      expect(page.temper).to.be.an('object');
+      expect(page.temper).to.be.instanceof(Temper);
+      expect(property.writable).to.equal(false);
+      expect(property.enumerable).to.equal(false);
+      expect(property.configurable).to.equal(false);
+    });
+
+    it('pipe instance', function () {
+      var property = Object.getOwnPropertyDescriptor(page, 'pipe');
+
+      expect(page).to.have.property('pipe');
+      expect(page.pipe).to.be.an('object');
+      expect(page.pipe).to.be.instanceof(Pipe);
+      expect(property.writable).to.equal(false);
+      expect(property.enumerable).to.equal(false);
+      expect(property.configurable).to.equal(false);
+    });
+  });
+
+  describe('#discover', function () {
+    it('emits discover and returns immediatly if the parent pagelet has no children', function (done) {
+      page.once('discover', done);
+      page.discover();
+    });
+
+    /* Disabled for now, might return before 1.0.0
+    it('initializes pagelets by allocating from the Pagelet.freelist', function (done) {
+      var Hero = require(__dirname + '/fixtures/pagelets/hero').optimize(app.temper)
+        , Faq = require(__dirname + '/fixtures/pages/faq').extend({ pagelets: [ Hero ] })
+        , pageletFreelist = sinon.spy(Hero.freelist, 'alloc')
+        , faq = new Faq(app);
+
+      faq.once('discover', function () {
+        expect(pageletFreelist).to.be.calledOnce;
+        done();
+      });
+
+      faq.discover();
+    });*/
+  });
+
   describe('.optimize', function () {
     it('is a function', function () {
       assume(Pagelet.optimize).to.be.a('function');

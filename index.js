@@ -54,6 +54,7 @@ function Pagelet(options) {
   readable('debug', debug('pagelet:'+ this.name));
 }
 
+fuse(Pagelet, require('eventemitter3'));
 fuse(Pagelet, Stream, { emits: false });
 
 /**
@@ -968,45 +969,6 @@ Pagelet.readable('connect', function connect(spark, next) {
     return pagelet;
   });
 });
-
-/**
- * Simple emit wrapper that returns a function that emits an event once it's
- * called
- *
- * ```js
- * example.on('close', example.emits('close'));
- * ```
- *
- * @param {String} event Name of the event that we should emit.
- * @param {Function} parser The last argument, if it's a function is a arg parser
- * @api public
- */
-Pagelet.prototype.emits = function emits() {
-  var args = slice.call(arguments, 0)
-    , self = this
-    , parser;
-
-  //
-  // Assume that if the last given argument is a function, it would be
-  // a parser.
-  //
-  if ('function' === typeof args[args.length - 1]) {
-    parser = args.pop();
-  }
-
-  return function emit(arg) {
-    if (!self.listeners(args[0]).length) return false;
-
-    if (parser) {
-      arg = parser.apply(self, arguments);
-      if (!Array.isArray(arg)) arg = [arg];
-    } else {
-      arg = slice.call(arguments, 0);
-    }
-
-    return Stream.prototype.emit.apply(self, args.concat(arg));
-  };
-};
 
 /**
  * Authenticate the Pagelet.
