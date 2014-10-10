@@ -2,8 +2,11 @@ describe('Pagelet', function () {
   'use strict';
 
   var Pagelet = require('../').extend({ name: 'test' })
+    , Temper = require('temper')
+    , Pipe = require('bigpipe')
     , custom = '/unexisting/absolute/path/to/prepend'
     , assume = require('assume')
+    , server = require('http').createServer()
     , pagelet
     , P;
 
@@ -11,7 +14,8 @@ describe('Pagelet', function () {
   // A lazy mans temper, we just want ignore all temper actions sometimes
   // because our pagelet is not exported using `.on(module)`
   //
-  var temper = { prefetch: function () {} };
+  var temper = new Temper
+    , pipe = new Pipe(server);
 
   beforeEach(function () {
     P = Pagelet.extend({
@@ -25,7 +29,7 @@ describe('Pagelet', function () {
       ]
     });
 
-    pagelet = new P();
+    pagelet = new P;
   });
 
   afterEach(function each() {
@@ -36,8 +40,29 @@ describe('Pagelet', function () {
     pagelet.get(pagelet.emits('called'));
 
     // Listening only till after the event is potentially emitted, will ensure
-    // callbacks are called asynchronously by pagelet#render.
+    // callbacks are called asynchronously by pagelet.render.
     pagelet.on('called', done);
+  });
+
+  it('can have reference to temper', function () {
+    pagelet = new P({ temper: temper });
+    var property = Object.getOwnPropertyDescriptor(pagelet, 'temper');
+
+    assume(pagelet.temper).to.be.an('object');
+    assume(property.writable).to.equal(true);
+    assume(property.enumerable).to.equal(false);
+    assume(property.configurable).to.equal(true);
+  });
+
+  it('can have reference to pipe instance', function () {
+    pagelet = new P({ pipe: pipe });
+    var property = Object.getOwnPropertyDescriptor(pagelet, 'pipe');
+
+    assume(pagelet.pipe).to.be.an('object');
+    assume(pagelet.pipe).to.be.instanceof(Pipe);
+    assume(property.writable).to.equal(false);
+    assume(property.enumerable).to.equal(false);
+    assume(property.configurable).to.equal(false);
   });
 
   describe('.on', function () {
@@ -59,19 +84,6 @@ describe('Pagelet', function () {
 
       P.on(module);
       assume(P.prototype.view).to.equal(__dirname +'/fixtures/view.html');
-    });
-
-    it('still allows extending', function (next) {
-      assume(P.prototype.css).to.be.a('string');
-
-      P.on(module);
-      assume(P.prototype.css).to.be.a('array');
-
-      var Y = P.extend({ foo: 'bar' });
-      Y.optimize(function (err) {
-        assume(Y.prototype.view).to.equal(__dirname +'/fixtures/view.html');
-        next(err);
-      });
     });
 
     it('resolves the `error` view');
@@ -150,34 +162,10 @@ describe('Pagelet', function () {
     });
   });
 
-  describe('has readable instance properties', function () {
-    it('temper template compiler', function () {
-      var property = Object.getOwnPropertyDescriptor(page, 'temper');
-
-      expect(page).to.have.property('temper');
-      expect(page.temper).to.be.an('object');
-      expect(page.temper).to.be.instanceof(Temper);
-      expect(property.writable).to.equal(false);
-      expect(property.enumerable).to.equal(false);
-      expect(property.configurable).to.equal(false);
-    });
-
-    it('pipe instance', function () {
-      var property = Object.getOwnPropertyDescriptor(page, 'pipe');
-
-      expect(page).to.have.property('pipe');
-      expect(page.pipe).to.be.an('object');
-      expect(page.pipe).to.be.instanceof(Pipe);
-      expect(property.writable).to.equal(false);
-      expect(property.enumerable).to.equal(false);
-      expect(property.configurable).to.equal(false);
-    });
-  });
-
-  describe('#discover', function () {
+  describe('.discover', function () {
     it('emits discover and returns immediatly if the parent pagelet has no children', function (done) {
-      page.once('discover', done);
-      page.discover();
+      pagelet.once('discover', done);
+      pagelet.discover();
     });
 
     /* Disabled for now, might return before 1.0.0
@@ -188,7 +176,7 @@ describe('Pagelet', function () {
         , faq = new Faq(app);
 
       faq.once('discover', function () {
-        expect(pageletFreelist).to.be.calledOnce;
+        assume(pageletFreelist).to.be.calledOnce;
         done();
       });
 
@@ -196,119 +184,36 @@ describe('Pagelet', function () {
     });*/
   });
 
-  describe('.optimize', function () {
+  describe('.children', function () {
     it('is a function', function () {
-      assume(Pagelet.optimize).to.be.a('function');
-      assume(P.optimize).to.be.a('function');
-      assume(Pagelet.optimize).to.equal(P.optimize);
-    });
-
-    it('uses the supplied temper for prefetching', function (next) {
-      var calls = 0;
-      P.optimize({
-        temper: {
-          prefetch: function () {
-            ++calls;
-          }
-        }
-      }, function (err) {
-        if (err) return next(err);
-
-        assume(calls).to.equal(2);
-        next();
-      });
-    });
-
-    it('resolves the view', function (next) {
-      assume(P.prototype.view).to.equal('fixtures/view.html');
-      P.optimize({}, function () {
-        assume(P.prototype.view).to.equal(__dirname +'/fixtures/view.html');
-        next();
-      });
-    });
-
-    it('prefetches the `view`');
-    it('prefetches the `error` view');
-
-    it('allows rpc as a string', function (next) {
-      var X = P.extend({
-        RPC: 'fixtures, bar',
-        fixtures: function () {},
-        bar: function () {}
-      });
-
-      X.optimize({ temper: temper }, function (err) {
-        if (err) return next(err);
-
-        assume(X.prototype.RPC).to.be.a('array');
-        assume(X.prototype.RPC).to.have.length(2);
-        assume(X.prototype.RPC).to.include('bar');
-        assume(X.prototype.RPC).to.include('fixtures');
-
-        next();
-      });
-    });
-
-    it('checks if all rpc functions are available', function (next) {
-      var X = P.extend({
-        RPC: 'fixtures, bar',
-        bar: function () {}
-      });
-
-      X.optimize({ temper: temper }, function (err) {
-        assume(err).to.be.a('error');
-        assume(err.message).to.include('fixtures');
-
-        next();
-      });
-    });
-
-    it('allows lowercase rpc', function (next) {
-      var X = P.extend({
-        rpc: ['fixtures', 'bar'],
-        bar: function () {}
-      });
-
-      X.optimize({ temper: temper }, function (err) {
-        assume(err).to.be.a('error');
-        assume(err.message).to.include('fixtures');
-
-        next();
-      });
-    });
-  });
-
-  describe('.traverse', function () {
-    it('is a function', function () {
-      assume(Pagelet.traverse).to.be.a('function');
-      assume(P.traverse).to.be.a('function');
-      assume(Pagelet.traverse).to.equal(P.traverse);
+      assume(Pagelet.children).to.be.a('function');
+      assume(P.children).to.be.a('function');
+      assume(Pagelet.children).to.equal(P.children);
     });
 
     it('returns an array', function () {
-      var one = P.traverse()
+      var one = P.children()
         , recur = P.extend({
             pagelets: {
               child: P.extend({ name: 'child' })
             }
-          }).traverse('this one');
+          }).children('this one');
 
       assume(one).to.be.an('array');
-      assume(one.length).to.equal(1);
+      assume(one.length).to.equal(0);
 
       assume(recur).to.be.an('array');
-      assume(recur.length).to.equal(2);
+      assume(recur.length).to.equal(1);
     });
 
-    it('will at least return the pagelet', function () {
-      var single = P.traverse();
+    it('will only return children of the pagelet', function () {
+      var single = P.children();
 
-      assume(single[0].prototype._parent).to.equal(undefined);
-      assume(single[0].prototype.directory).to.equal(__dirname);
-      assume(single[0].prototype.view).to.equal('fixtures/view.html');
+      assume(single).to.be.an('array');
+      assume(single.length).to.equal(0);
     });
 
-    it('does recursive pagelet discovery', function () {
+    it('does not do recursive pagelet discovery', function () {
       var recur = P.extend({
         pagelets: {
           child: P.extend({
@@ -318,13 +223,11 @@ describe('Pagelet', function () {
             }
           }),
         }
-      }).traverse('multiple');
+      }).children('multiple');
 
       assume(recur).is.an('array');
-      assume(recur.length).to.equal(3);
-
-      assume(recur[1].prototype.name).to.equal('child');
-      assume(recur[2].prototype.name).to.equal('another');
+      assume(recur.length).to.equal(1);
+      assume(recur[0].prototype.name).to.equal('child');
     });
 
     it('sets the pagelets parent name on `_parent`', function () {
@@ -334,10 +237,9 @@ describe('Pagelet', function () {
             name: 'child'
           })
         }
-      }).traverse('parental');
+      }).children('parental');
 
-      assume(recur[0].prototype._parent).to.equal(undefined);
-      assume(recur[1].prototype._parent).to.equal('parental');
+      assume(recur[0].prototype._parent).to.equal('parental');
     });
   });
 });

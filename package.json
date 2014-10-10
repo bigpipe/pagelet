@@ -1,6 +1,6 @@
 {
   "name": "pagelet",
-  "version": "0.8.2",
+  "version": "0.9.0",
   "description": "pagelet",
   "main": "index.js",
   "scripts": {
@@ -29,17 +29,20 @@
     "fabricator": "0.4.x",
     "fusing": "0.3.x",
     "json-stringify-safe": "5.0.x",
+    "routable": "0.0.x",
     "temper": "0.2.x"
   },
   "devDependencies": {
-    "illuminati": "0.0.x",
     "assume": "0.0.x",
+    "bigpipe": "^0.8.5",
     "coveralls": "2.10.x",
+    "illuminati": "0.0.x",
     "istanbul": "0.2.x",
     "mocha": "1.20.x",
     "mocha-lcov-reporter": "0.0.x",
     "primus": "2.4.x",
     "substream": "0.1.x",
+    "temper": "^0.2.1",
     "ws": "0.4.x"
   }
 }

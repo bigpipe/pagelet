@@ -4,6 +4,7 @@ var jstringify = require('json-stringify-safe')
   , fabricate = require('fabricator')
   , debug = require('diagnostics')
   , dot = require('dot-component')
+  , Route = require('routable')
   , Stream = require('stream')
   , fuse = require('fusing')
   , async = require('async')
@@ -20,6 +21,17 @@ var slice = Array.prototype.slice;
 var operations = 'POST, PUT, DELETE, PATCH'.toLowerCase().split(', ');
 
 /**
+ * Simple helper function to generate some what unique id's for given
+ * constructed pagelet.
+ *
+ * @returns {String}
+ * @api private
+ */
+function generator() {
+  return Math.random().toString(36).substring(2).toUpperCase();
+}
+
+/**
  * A pagelet is the representation of an item, section, column or widget.
  * It's basically a small sandboxed application within your application.
  *
@@ -31,27 +43,26 @@ function Pagelet(options) {
 
   this.fuse();
   options = options || {};
-  options.temper = options.temper || options.pipe.temper;
 
   var writable = this.writable
     , readable = this.readable;
 
-  readable('pipe', options.pipe);               // Actual pipe instance.
-
-  writable('params', {});                       // Params extracted from the route.
-  writable('enabled', []);                      // Contains all enabled pagelets.
-  writable('disabled', []);                     // Contains all disable pagelets.
-  writable('_active', null);                    // Are we active.
-  writable('substream', null);                  // Substream from Primus.
-  writable('req', options.req);                 // Incoming HTTP request.
-  writable('res', options.res);                 // Incoming HTTP response.
-  writable('temper', options.temper);           // Attach the Temper instance.
-
   //
-  // Add an correctly namespaced debug method so it easier to see which pagelet
-  // is called by just checking the name of it.
+  // Use the temper instance on Pipe if available.
   //
-  readable('debug', debug('pagelet:'+ this.name));
+  if (options.pipe && options.pipe.temper) options.temper = options.pipe.temper;
+
+  writable('params', {});                           // Params extracted from the route.
+  writable('enabled', []);                          // Contains all enabled pagelets.
+  writable('disabled', []);                         // Contains all disable pagelets.
+  writable('_active', null);                        // Are we active.
+  writable('substream', null);                      // Substream from Primus.
+  writable('req', options.req);                     // Incoming HTTP request.
+  writable('res', options.res);                     // Incoming HTTP response.
+  writable('temper', options.temper);               // Attach the Temper instance.
+
+  readable('pipe', options.pipe);                   // Actual pipe instance.
+  readable('debug', debug('pagelet:'+ this.name));  // Namespaced debug method
 }
 
 fuse(Pagelet, require('eventemitter3'));
@@ -1099,7 +1110,7 @@ Pagelet.resolve = function resolve(keys, dir) {
  */
 Pagelet.on = function on(module) {
   var prototype = this.prototype
-    , dir = prototype.directory = prototype.directory || path.dirname(module.filename);
+    , dir = prototype.directory = path.dirname(module.filename);
 
   prototype.error = prototype.error
     ? path.resolve(dir, prototype.error)
@@ -1126,7 +1137,7 @@ Pagelet.on = function on(module) {
  * @return {Array} collection of pagelets instances.
  * @api public
  */
-Pagelet.traverse = function traverse(parent) {
+Pagelet.children = function children(parent) {
   var pagelets = this.prototype.pagelets
     , log = debug('pagelet:'+ parent)
     , found = [];
@@ -1141,12 +1152,11 @@ Pagelet.traverse = function traverse(parent) {
 
     //
     // We need to extend the pagelet if it already has a _parent name reference
-    // or will accidentally override it. This you have Pagelet with child
-    // pagelet. And you extend the parent pagelet so it receives a new name. But
-    // the extended parent and regular parent still point to the same child
-    // pagelet. So when we try to traverse these pagelets we will override
-    // _parent property unless we create a new fresh instance and set it on that
-    // instead.
+    // or will accidentally override it. This can happen when you extend a parent
+    // pagelet with children and alter the parent's name. The extended parent and
+    // regular parent still point to the same child pagelets. So when we try to
+    // set the proper parent, these pagelets will override the _parent property
+    // unless we create a new fresh instance and set it on that instead.
     //
     if (Pagelet.prototype._parent && Pagelet.prototype.name !== parent) {
       Pagelet = Pagelet.extend();
@@ -1157,6 +1167,131 @@ Pagelet.traverse = function traverse(parent) {
   });
 
   return found;
+};
+
+/**
+ * Optimize the prototypes of Pagelets to reduce work when we're actually
+ * serving the requests via BigPipe.
+ *
+ * Options:
+ * - temper: A custom temper instance we want to use to compile the templates.
+ *
+ * @param {Object} options Optimization configuration.
+ * @param {Function} next Completion callback for async execution.
+ * @api public
+ */
+Pagelet.optimize = function optimize(options, done) {
+  var Pagelet = this
+    , prototype = Pagelet.prototype
+    , method = prototype.method
+    , router = prototype.path
+    , name = prototype.name
+    , err;
+
+  //
+  // Options are optional, check if options is the actual callback.
+  //
+  if ('function' === typeof options) {
+    done = options;
+    options = {};
+  }
+
+  //
+  // Generate a unique ID used for real time connection lookups.
+  //
+  prototype.id = options.id || [1, 1, 1, 1].map(generator).join('-');
+
+  //
+  // Parse the methods to an array of accepted HTTP methods. We'll only accept
+  // these requests and should deny every other possible method.
+  //
+  debug('Optimizing pagelet %s registered for path %s', name, router);
+  if (!Array.isArray(method)) method = method.split(/[\s\,]+?/);
+
+  method = method.filter(Boolean).map(function transformation(method) {
+    return method.toUpperCase();
+  });
+
+  //
+  // Add the actual HTTP route and available HTTP methods.
+  //
+  if (router) Pagelet.router = new Route(router);
+  Pagelet.method = method;
+
+  //
+  // Prefetch the template if a view is available. The view property is
+  // mandatory but it's quite silly to enforce this if the pagelet is
+  // just doing a redirect. We can check for this edge case by
+  // checking if the set statusCode is in the 300~ range.
+  //
+  if (prototype.view) {
+    prototype.view = path.resolve(prototype.directory, prototype.view);
+    options.temper.prefetch(prototype.view, prototype.engine);
+  } else if (!(prototype.statusCode >= 300 && prototype.statusCode < 400)) {
+    throw new Error('The pagelet for path '+ router +' should have a .view property.');
+  }
+
+  //
+  // Ensure we have a custom error pagelet when we fail to render this fragment.
+  //
+  if (prototype.error) {
+    options.temper.prefetch(prototype.error, path.extname(prototype.error).slice(1));
+  }
+
+  //
+  // Map all dependencies to an absolute path or URL.
+  //
+  Pagelet.resolve(['css', 'js', 'dependencies']);
+
+  //
+  // Support lowercase variant of RPC
+  //
+  if ('rpc' in prototype) {
+    prototype.RPC = prototype.rpc;
+    delete prototype.rpc;
+  }
+
+  if ('string' === typeof prototype.RPC) {
+    prototype.RPC = prototype.RPC.split(/[\s|\,]+/);
+  }
+
+  //
+  // Validate the existance of the RPC methods, this reduces possible typo's
+  //
+  prototype.RPC.forEach(function validate(method) {
+    if (!(method in prototype)) return err = new Error(
+      name +' is missing RPC function `'+ method +'` on prototype'
+    );
+
+    if ('function' !== typeof prototype[method]) return err = new Error(
+      name +'#'+ method +' is not function which is required for RPC usage'
+    );
+  });
+
+  //
+  // Find all child pagelets and optimize the found pagelets.
+  //
+  async.map(Pagelet.children(name), function map(Child, next) {
+    if (Array.isArray(Child)) return async.map(Child, map, next);
+    Child.optimize({ temper: options.temper }, next);
+  }, function (err, children) {
+    if (err) return done(err);
+
+    //
+    // Store the optimized children on the prototype, this should already be
+    // a compatible array as the value is generated by an async.map.
+    //
+    prototype.pagelets = children.map(function map(Pagelet) {
+      return Array.isArray(Pagelet) ? Pagelet : [Pagelet];
+    });
+
+    //
+    // Return a reference to the parent pagelet, BigPipe uses async.map to
+    // generate collections of pagelets, returning this reference will reduce
+    // spaghetti code.
+    //
+    done(null, Pagelet);
+  });
 };
 
 //
