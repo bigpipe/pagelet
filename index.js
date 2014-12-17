@@ -1199,6 +1199,11 @@ Pagelet.optimize = function optimize(options, done) {
     , err;
 
   //
+  // Optimize was already performed on this pagelet, return early.
+  //
+  if (prototype.id) return done(null, Pagelet);
+
+  //
   // Check if before listener is found. Add before emit to the stack.
   // This async function will be called before optimize.
   //
@@ -1237,7 +1242,7 @@ Pagelet.optimize = function optimize(options, done) {
     // Parse the methods to an array of accepted HTTP methods. We'll only accept
     // these requests and should deny every other possible method.
     //
-    log('Optimizing pagelet %s registered for path %s', name, router);
+    log('Optimizing pagelet registered for path %s', router);
     if (!Array.isArray(method)) method = method.split(/[\s\,]+?/);
 
     method = method.filter(Boolean).map(function transformation(method) {
