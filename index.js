@@ -1181,36 +1181,53 @@ Pagelet.children = function children(parent) {
  * @api public
  */
 Pagelet.optimize = function optimize(options, done) {
+  if ('function' === typeof options) {
+    done = options;
+    options = {};
+  }
+
   var Pagelet = this
     , prototype = Pagelet.prototype
     , method = prototype.method
     , router = prototype.path
     , name = prototype.name
     , log = debug('pagelet:'+ name)
-    , stack = [ enhance ]
+    , stack = [ optimizer ]
+    , pipe = options.pipe || {}
+    , transform = options.transform || {}
+    , temper = pipe.temper || options.temper
     , err;
 
   //
-  // Options are optional, check if options is the actual callback.
+  // Check if before listener is found. Add before emit to the stack.
+  // This async function will be called before optimize.
   //
-  if ('function' === typeof options) {
-    done = options;
-    options = {};
+  if ('transform:pagelet:before' in pipe._events) {
+    stack.unshift(async.apply(transform.before, Pagelet));
   }
 
-  var pipe = options.pipe || {}
-    , temper = pipe.temper || options.temper
-    , transform = options.transform;
-
-  if ('object' === typeof transform) {
-    if (transform.before) stack.unshift(async.apply(transform.before, Pagelet));
-    if (transform.after) stack.push(async.apply(transform.after, Pagelet));
-  } else if ('function' === typeof transform) {
-    stack.push(async.apply(options.transform, Pagelet));
+  //
+  // Check if after listener is found. Add after emit to the stack.
+  // This async function will be called after optimize.
+  //
+  if ('transform:pagelet:after' in pipe._events) {
+    stack.push(async.apply(transform.after, Pagelet));
   }
 
+  //
+  // Run the stack in series. This ensures that before hooks are run
+  // prior to optimizing and after hooks are ran post optimizing.
+  //
   async.series(stack, done);
-  function enhance(next) {
+
+  /**
+   * Optimize the pagelet. This function is called by default as part of
+   * the async stack.
+   *
+   * @param {Function} next Completion callback
+   * @api private
+   */
+  function optimizer(next) {
     //
     // Generate a unique ID used for real time connection lookups.
     //
@@ -1296,8 +1313,8 @@ Pagelet.optimize = function optimize(options, done) {
           after: pipe.emits('transform:pagelet:after')
         }
       }, next);
-    }, function (err, children) {
-      if (err) return done(err);
+    }, function (error, children) {
+      if (error) return done(error);
 
       //
       // Store the optimized children on the prototype, wrapping the Pagelet
