@@ -1334,7 +1334,7 @@ Pagelet.optimize = function optimize(options, done) {
       // generate collections of pagelets, returning this reference will reduce
       // spaghetti code.
       //
-      next(null, Pagelet);
+      done(null, Pagelet);
     });
   }
 };
