@@ -56,7 +56,6 @@ function Pagelet(options) {
   writable('enabled', []);                          // Contains all enabled pagelets.
   writable('disabled', []);                         // Contains all disable pagelets.
   writable('_active', null);                        // Are we active.
-  writable('substream', null);                      // Substream from Primus.
   writable('req', options.req);                     // Incoming HTTP request.
   writable('res', options.res);                     // Incoming HTTP response.
   writable('temper', options.temper);               // Attach the Temper instance.
@@ -900,84 +899,6 @@ Pagelet.readable('render', function render(options, fn) {
 
       fragment(content);
     });
-  });
-});
-
-/**
- * Connect with a Primus substream.
- *
- * @param {Spark} spark The Primus connection.
- * @param {Function} next The completion callback
- * @returns {Pagelet}
- * @api private
- */
-Pagelet.readable('connect', function connect(spark, next) {
-  var pagelet = this;
-
-  /**
-   * Create a new Substream.
-   *
-   * @param {Boolean} enabled Allowed to use this pagelet.
-   * @returns {Pagelet}
-   * @api private
-   */
-  return this.conditional(spark.request, [], function substream(enabled) {
-    if (!enabled) return next(new Error('Unauthorized to access this pagelet'));
-
-    var stream = pagelet.substream = spark.substream(pagelet.name)
-      , log = debug('pagelet:primus:'+ pagelet.name);
-
-    log('created a new substream');
-
-    stream.once('end', pagelet.emits('end', function (arg) {
-      log('closing substream');
-
-      return arg;
-    }));
-
-    stream.on('data', function streamed(data) {
-      log('incoming packet %s', data.type);
-
-      switch (data.type) {
-        case 'rpc':
-          pagelet.call(data);
-        break;
-
-        case 'emit':
-          Stream.prototype.emit.apply(pagelet, [data.name].concat(data.args));
-        break;
-
-        case 'get':
-          pagelet.render({ substream: true }, function renderd(err, fragment) {
-            stream.write({ type: 'fragment', frag: fragment, err: err });
-          });
-        break;
-
-        case 'post':
-        case 'put':
-          if (!(data.type in pagelet)) {
-            return stream.write({ type: data.type, err: new Error('Method not supported by pagelet') });
-          }
-
-          pagelet[data.type](data.body || {}, data.files || [], function processed(err, context) {
-            if (err) return stream.write({ type: 'err', err: err });
-
-            pagelet.render({ data: context, substream: true }, function rendered(err, fragment) {
-              if (err) return stream.write({ type: 'err', err: err });
-
-              stream.write({ type: 'fragment', frag: fragment, err: err });
-            });
-          });
-        break;
-
-        default:
-          log('unknown packet type %s, ignoring packet', data.type);
-        break;
-      }
-    });
-
-    next(undefined, pagelet);
-    return pagelet;
   });
 });
 
