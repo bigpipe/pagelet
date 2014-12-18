@@ -39,7 +39,7 @@ function generator() {
  * @api public
  */
 function Pagelet(options) {
-  if (!(this instanceof Pagelet)) return new Pagelet(options);
+  if (!this) return new Pagelet(options);
 
   this.fuse();
   options = options || {};
