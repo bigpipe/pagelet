@@ -128,42 +128,6 @@ Pagelet.writable('pagelets', {});
 Pagelet.writable('bootstrap', null);
 
 /**
- * When enabled we will stream the submit of each form that is within a Pagelet
- * to the server instead of using the default full page refreshes. After sending
- * the data the resulting HTML will be used to only update the contents of the
- * pagelet.
- *
- * If you want to opt-out of this with one form you can add
- * a `data-pagelet-async="false"` attribute to the form element.
- *
- * @type {Boolean}
- * @public
- */
-Pagelet.writable('streaming', false);
-
-/**
- * These methods can be remotely called from the client. Please note that they
- * are not set to the client, it will merely be executing on the server side.
- *
- * ```js
- * Pagelet.extend({
- *   RPC: [
- *     'methodname',
- *     'another'
- *   ],
- *
- *   methodname: function methodname(reply) {
- *
- *   }
- * }).on(module);
- * ```
- *
- * @type {Array}
- * @public
- */
-Pagelet.writable('RPC', []);
-
-/**
  * Specify a mode that should be used for node client side rendering, this defaults
  * to HTML. For instance to allow a pagelet to generate SVG elements use mode svg.
  *
@@ -718,7 +682,7 @@ Pagelet.readable('async', function render(err, data) {
     async.each(pagelet.enabled.concat(pagelet.disabled), function (pagelet, next) {
       pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
 
-      data = pagelet.pipe.compiler.pagelet(pagelet, pagelet.streaming);
+      data = pagelet.pipe.compiler.pagelet(pagelet);
       data.processed = ++bootstrap.n;
 
       pagelet.render({
@@ -805,16 +769,14 @@ Pagelet.readable('render', function render(options, fn) {
 
     if (!active) content = '';
 
-    if (options.substream || pagelet.mode === 'sync') {
+    if (pagelet.mode === 'sync') {
       data.view = content;
       return fn.call(context, undefined, data);
     }
 
     data.id = data.id || pagelet.id;                      // Pagelet id.
     data.mode = data.mode || pagelet.mode;                // Pagelet render mode.
-    data.rpc = data.rpc || pagelet.RPC;                   // RPC methods.
     data.remove = active ? false : pagelet.remove;        // Remove from DOM.
-    data.streaming = !!pagelet.streaming;                 // Submit streaming.
     data.parent = pagelet._parent;                        // Send parent name along.
     data.append = pagelet._append;                        // Content should be appended.
     data.hash = {
@@ -936,39 +898,6 @@ Pagelet.readable('conditional', function conditional(req, list, fn) {
   return pagelet;
 });
 
-
-/**
- * Call an RPC method.
- *
- * @param {Object} data The RPC call information.
- * @api private
- */
-Pagelet.readable('call', function calls(data) {
-  var index = this.RPC.indexOf(data.method)
-    , fn = this[data.method]
-    , pagelet = this
-    , err;
-
-  if (!~index || 'function' !== typeof fn) return this.substream.write({
-    args: [new Error('RPC method is not known')],
-    type: 'rpc',
-    id: data.id
-  });
-
-  //
-  // Our RPC pattern is a callback first pattern, where the callback is the
-  // first argument that a function receives. This makes it a lot easier to add
-  // a variable length of arguments to a function call.
-  //
-  fn.apply(pagelet, [function reply() {
-    pagelet.substream.write({
-      args: slice.call(arguments, 0),
-      type: 'rpc',
-      id: data.id
-    });
-  }].concat(data.args));
-});
-
 /**
  * Destroy the pagelet and remove all the back references so it can be safely
  * garbage collected.
@@ -976,8 +905,6 @@ Pagelet.readable('call', function calls(data) {
  * @api public
  */
 Pagelet.readable('destroy', function destroy() {
-  if (this.substream) this.substream.end();
-
   this.temper = null;
   this.removeAllListeners();
 
@@ -1200,31 +1127,6 @@ Pagelet.optimize = function optimize(options, done) {
     // Map all dependencies to an absolute path or URL.
     //
     Pagelet.resolve(['css', 'js', 'dependencies']);
-
-    //
-    // Support lowercase variant of RPC
-    //
-    if ('rpc' in prototype) {
-      prototype.RPC = prototype.rpc;
-      delete prototype.rpc;
-    }
-
-    if ('string' === typeof prototype.RPC) {
-      prototype.RPC = prototype.RPC.split(/[\s|\,]+/);
-    }
-
-    //
-    // Validate the existance of the RPC methods, this reduces possible typo's
-    //
-    prototype.RPC.forEach(function validate(method) {
-      if (!(method in prototype)) return err = new Error(
-        name +' is missing RPC function `'+ method +'` on prototype'
-      );
-
-      if ('function' !== typeof prototype[method]) return err = new Error(
-        name +'#'+ method +' is not function which is required for RPC usage'
-      );
-    });
 
     //
     // Find all child pagelets and optimize the found pagelets.
