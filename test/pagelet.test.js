@@ -4,11 +4,9 @@ describe('Pagelet', function () {
   var Pagelet = require('../').extend({ name: 'test' })
     , Temper = require('temper')
     , Pipe = require('bigpipe')
-    , custom = '/unexisting/absolute/path/to/prepend'
     , assume = require('assume')
     , server = require('http').createServer()
-    , pagelet
-    , P;
+    , pagelet, P;
 
   //
   // A lazy mans temper, we just want ignore all temper actions sometimes
@@ -36,7 +34,7 @@ describe('Pagelet', function () {
     pagelet = null;
   });
 
-  it('rendering is asynchronously', function (done) {
+  it('rendering is asynchronous', function (done) {
     pagelet.get(pagelet.emits('called'));
 
     // Listening only till after the event is potentially emitted, will ensure
@@ -87,79 +85,6 @@ describe('Pagelet', function () {
     });
 
     it('resolves the `error` view');
-    it('resolves the `css` files in to an array');
-    it('resolves the `js` files in to an array');
-    it('resolves the `dependencies` files in to an array');
-  });
-
-  describe('.resolve', function () {
-    it('is a function', function () {
-      assume(Pagelet.resolve).to.be.a('function');
-      assume(P.resolve).to.be.a('function');
-      assume(Pagelet.resolve).to.equal(P.resolve);
-    });
-
-    it('will resolve provided property on prototype', function () {
-      var result = P.resolve('css');
-
-      assume(result).to.equal(P);
-      assume(P.prototype.css).to.be.an('array');
-      assume(P.prototype.css.length).to.equal(1);
-      assume(P.prototype.css[0]).to.equal(__dirname + '/fixtures/style.css');
-    });
-
-    it('can resolve multiple properties at once', function () {
-      P.resolve(['css', 'js']);
-
-      assume(P.prototype.css).to.be.an('array');
-      assume(P.prototype.js).to.be.an('array');
-      assume(P.prototype.css.length).to.equal(1);
-      assume(P.prototype.js.length).to.equal(1);
-    });
-
-    it('can be provided with a custom source directory', function () {
-      P.resolve('css', custom);
-
-      assume(P.prototype.css[0]).to.equal(custom + '/fixtures/style.css');
-    });
-
-    it('only resolves local files', function () {
-      P.resolve('js', custom);
-
-      assume(P.prototype.js[0]).to.not.include(custom);
-      assume(P.prototype.js[0]).to.equal('//cdnjs.cloudflare.com/ajax/libs/d3/3.4.8/d3.min.js');
-    });
-
-    it('can handle property values that are already an array', function () {
-      P.resolve('dependencies', custom);
-
-      assume(P.prototype.dependencies.length).to.equal(2);
-      assume(P.prototype.dependencies[0]).to.not.include(custom);
-      assume(P.prototype.dependencies[0]).to.equal('http://code.jquery.com/jquery-2.0.0.js');
-      assume(P.prototype.dependencies[1]).to.equal(custom + '/fixtures/custom.js');
-    });
-
-    it('removes undefined values from the array before processing', function () {
-      var Undef = P.extend({
-        dependencies: P.prototype.dependencies.concat(
-          undefined
-        )
-      });
-
-      assume(Undef.prototype.dependencies.length).to.equal(3);
-
-      Undef.resolve('dependencies', custom);
-      assume(Undef.prototype.dependencies.length).to.equal(2);
-      assume(Undef.prototype.dependencies).to.not.include(undefined);
-    });
-
-    it('can be overriden', function () {
-      P.resolve = function () {
-        throw new Error('fucked');
-      };
-
-      P.on({});
-    });
   });
 
   describe('.discover', function () {

@@ -2,6 +2,7 @@
 
 var jstringify = require('json-stringify-safe')
   , fabricate = require('fabricator')
+  , helpers = require('./helpers')
   , debug = require('diagnostics')
   , dot = require('dot-component')
   , Route = require('routable')
@@ -937,11 +938,6 @@ Pagelet.on = function on(module) {
     : path.resolve(__dirname, 'error.html');
 
   //
-  // Map all dependencies to an absolute path or URL.
-  //
-  resolve(this, ['css', 'js', 'dependencies']);
-
-  //
   // Resolve the view to make sure an absolute path is provided to Temper.
   //
   if (prototype.view) prototype.view = path.resolve(dir, prototype.view);
@@ -1098,7 +1094,7 @@ Pagelet.optimize = function optimize(options, done) {
     //
     // Map all dependencies to an absolute path or URL.
     //
-    resolve(Pagelet, ['css', 'js', 'dependencies']);
+    helpers.resolve(Pagelet, ['css', 'js', 'dependencies']);
 
     //
     // Find all child pagelets and optimize the found pagelets.
@@ -1133,35 +1129,6 @@ Pagelet.optimize = function optimize(options, done) {
     });
   }
 };
-
-/**
- * Helper function to resolve assets on the pagelet.
- *
- * @param {Function} constructor The Pagelet constructor
- * @param {String|Array} keys Name(s) of the property, e.g. [css, js].
- * @param {String} dir Optional absolute directory to resolve from.
- * @returns {Pagelet}
- * @api private
- */
-function resolve(constructor, keys, dir) {
-  var prototype = constructor.prototype;
-
-  keys = Array.isArray(keys) ? keys : [keys];
-  keys.forEach(function each(key) {
-    if (!prototype[key]) return;
-
-    var stack = Array.isArray(prototype[key])
-      ? prototype[key]
-      : [prototype[key]];
-
-    prototype[key] = stack.filter(Boolean).map(function map(file) {
-      if (/^(http:|https:)?\/\//.test(file)) return file;
-      return path.resolve(dir || prototype.directory, file);
-    });
-  });
-
-  return constructor;
-}
 
 //
 // Expose the pagelet.
