@@ -1055,7 +1055,7 @@ Pagelet.optimize = function optimize(options, done) {
   // Check if before listener is found. Add before emit to the stack.
   // This async function will be called before optimize.
   //
-  if ('transform:pagelet:before' in pipe._events) {
+  if (pipe._events && 'transform:pagelet:before' in pipe._events) {
     stack.unshift(async.apply(transform.before, Pagelet));
   }
 
@@ -1063,7 +1063,7 @@ Pagelet.optimize = function optimize(options, done) {
   // Check if after listener is found. Add after emit to the stack.
   // This async function will be called after optimize.
   //
-  if ('transform:pagelet:after' in pipe._events) {
+  if (pipe._events && 'transform:pagelet:after' in pipe._events) {
     stack.push(async.apply(transform.after, Pagelet));
   }
 
