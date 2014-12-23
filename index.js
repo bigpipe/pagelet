@@ -953,18 +953,19 @@ Pagelet.on = function on(module) {
  * @return {Array} collection of pagelets instances.
  * @api public
  */
-Pagelet.children = function children(parent) {
+Pagelet.children = function children(parent, stack) {
   var pagelets = this.prototype.pagelets
-    , log = debug('pagelet:'+ parent)
-    , found = [];
+    , log = debug('pagelet:'+ parent);
 
-  if (!parent || !pagelets) return found;
+  stack = stack || [];
+  if (!parent || !pagelets || !Object.keys(pagelets).length) return stack;
 
-  fabricate(pagelets, {
+  return fabricate(pagelets, {
     source: this.prototype.directory,
     recursive: 'string' === typeof pagelets
-  }).map(function each(Pagelet) {
-    log('Recursive discovery of child pagelet %s', Pagelet.prototype.name);
+  }).reduce(function each(stack, Pagelet) {
+    var name = Pagelet.prototype.name;
+    log('Recursive discovery of child pagelet %s', name);
 
     //
     // We need to extend the pagelet if it already has a _parent name reference
@@ -974,15 +975,13 @@ Pagelet.children = function children(parent) {
     // set the proper parent, these pagelets will override the _parent property
     // unless we create a new fresh instance and set it on that instead.
     //
-    if (Pagelet.prototype._parent && Pagelet.prototype.name !== parent) {
+    if (Pagelet.prototype._parent && name !== parent) {
       Pagelet = Pagelet.extend();
     }
 
     Pagelet.prototype._parent = parent;
-    found.push(Pagelet);
-  });
-
-  return found;
+    return Pagelet.children(name, stack.concat(Pagelet));
+  }, stack);
 };
 
 /**
@@ -1002,29 +1001,17 @@ Pagelet.optimize = function optimize(options, done) {
     options = {};
   }
 
-  var Pagelet = this
-    , prototype = Pagelet.prototype
-    , method = prototype.method
-    , router = prototype.path
-    , name = prototype.name
-    , log = debug('pagelet:'+ name)
-    , stack = [ optimizer ]
+  var stack = [ optimizer ]
     , pipe = options.pipe || {}
     , transform = options.transform || {}
-    , temper = pipe.temper || options.temper
-    , err;
-
-  //
-  // Optimize was already performed on this pagelet, return early.
-  //
-  if (prototype.id) return done(null, Pagelet);
+    , temper = pipe.temper || options.temper;
 
   //
   // Check if before listener is found. Add before emit to the stack.
   // This async function will be called before optimize.
   //
   if (pipe._events && 'transform:pagelet:before' in pipe._events) {
-    stack.unshift(async.apply(transform.before, Pagelet));
+    stack.unshift(async.apply(transform.before, this));
   }
 
   //
@@ -1032,14 +1019,14 @@ Pagelet.optimize = function optimize(options, done) {
   // This async function will be called after optimize.
   //
   if (pipe._events && 'transform:pagelet:after' in pipe._events) {
-    stack.push(async.apply(transform.after, Pagelet));
+    stack.push(async.apply(transform.after, this));
   }
 
   //
   // Run the stack in series. This ensures that before hooks are run
   // prior to optimizing and after hooks are ran post optimizing.
   //
-  async.series(stack, done);
+  async.waterfall(stack, done);
 
   /**
    * Optimize the pagelet. This function is called by default as part of
@@ -1048,7 +1035,26 @@ Pagelet.optimize = function optimize(options, done) {
    * @param {Function} next Completion callback
    * @api private
    */
-  function optimizer(next) {
+  function optimizer(Pagelet, next) {
+    var prototype = Pagelet.prototype
+      , method = prototype.method
+      , router = prototype.path
+      , name = prototype.name
+      , log = debug('pagelet:'+ name);
+
+    //
+    // Map all dependencies to an absolute path or URL.
+    //
+    helpers.resolve(Pagelet, ['css', 'js', 'dependencies']);
+
+    //
+    // Optimize was already performed on this pagelet, return early.
+    //
+    if (prototype.id) {
+      log('Skip optimizing, pagelet was already optimized');
+      return next(null, Pagelet);
+    }
+
     //
     // Generate a unique ID used for real time connection lookups.
     //
@@ -1058,18 +1064,20 @@ Pagelet.optimize = function optimize(options, done) {
     // Parse the methods to an array of accepted HTTP methods. We'll only accept
     // these requests and should deny every other possible method.
     //
-    log('Optimizing pagelet registered for path %s', router);
+    log('Optimizing pagelet');
     if (!Array.isArray(method)) method = method.split(/[\s\,]+?/);
 
-    method = method.filter(Boolean).map(function transformation(method) {
+    Pagelet.method = method.filter(Boolean).map(function transformation(method) {
       return method.toUpperCase();
     });
 
     //
     // Add the actual HTTP route and available HTTP methods.
     //
-    if (router) Pagelet.router = new Route(router);
-    Pagelet.method = method;
+    if (router) {
+      log('Instantiating router for path %s', router);
+      Pagelet.router = new Route(router);
+    }
 
     //
     // Prefetch the template if a view is available. The view property is
@@ -1092,15 +1100,10 @@ Pagelet.optimize = function optimize(options, done) {
     }
 
     //
-    // Map all dependencies to an absolute path or URL.
+    // Find all child pagelets and optimize the found children.
     //
-    helpers.resolve(Pagelet, ['css', 'js', 'dependencies']);
-
-    //
-    // Find all child pagelets and optimize the found pagelets.
-    //
-    async.map(Pagelet.children(name), function map(Child, next) {
-      if (Array.isArray(Child)) return async.map(Child, map, next);
+    async.map(Pagelet.children(name), function map(Child, step) {
+      if (Array.isArray(Child)) return async.map(Child, map, step);
 
       Child.optimize({
         pipe: pipe,
@@ -1108,9 +1111,9 @@ Pagelet.optimize = function optimize(options, done) {
           before: pipe.emits('transform:pagelet:before'),
           after: pipe.emits('transform:pagelet:after')
         }
-      }, next);
-    }, function (error, children) {
-      if (error) return done(error);
+      }, step);
+    }, function optimized(error, children) {
+      if (error) return next(error);
 
       //
       // Store the optimized children on the prototype, wrapping the Pagelet
@@ -1121,11 +1124,11 @@ Pagelet.optimize = function optimize(options, done) {
       });
 
       //
-      // Return a reference to the parent pagelet, BigPipe uses async.map to
-      // generate collections of pagelets, returning this reference will reduce
-      // spaghetti code.
+      // Always return a reference to the parent Pagelet.
+      // Otherwise the stack of parents would be infested
+      // with children returned by this async.map.
       //
-      done(null, Pagelet);
+      next(null, Pagelet);
     });
   }
 };
