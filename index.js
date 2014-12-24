@@ -1044,6 +1044,8 @@ Pagelet.optimize = function optimize(options, done) {
 
     //
     // Map all dependencies to an absolute path or URL.
+    // @TODO this should not have to be repeated for each pagelet, ID
+    // is set to all childs as well :/
     //
     helpers.resolve(Pagelet, ['css', 'js', 'dependencies']);
 
