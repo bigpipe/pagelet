@@ -1001,10 +1001,10 @@ Pagelet.optimize = function optimize(options, done) {
     options = {};
   }
 
-  var stack = [ optimizer ]
-    , pipe = options.pipe || {}
+  var pipe = options.pipe || {}
     , transform = options.transform || {}
-    , temper = pipe.temper || options.temper;
+    , temper = pipe.temper || options.temper
+    , stack = [async.apply(optimizer, this)];
 
   //
   // Check if before listener is found. Add before emit to the stack.
@@ -1068,7 +1068,6 @@ Pagelet.optimize = function optimize(options, done) {
     //
     log('Optimizing pagelet');
     if (!Array.isArray(method)) method = method.split(/[\s\,]+?/);
-
     Pagelet.method = method.filter(Boolean).map(function transformation(method) {
       return method.toUpperCase();
     });
