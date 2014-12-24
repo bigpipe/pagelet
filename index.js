@@ -1001,18 +1001,24 @@ Pagelet.optimize = function optimize(options, done) {
     options = {};
   }
 
-  var pipe = options.pipe || {}
+  var stack = []
+    , pipe = options.pipe || {}
     , transform = options.transform || {}
-    , temper = pipe.temper || options.temper
-    , stack = [async.apply(optimizer, this)];
+    , temper = pipe.temper || options.temper;
 
   //
   // Check if before listener is found. Add before emit to the stack.
   // This async function will be called before optimize.
   //
   if (pipe._events && 'transform:pagelet:before' in pipe._events) {
-    stack.unshift(async.apply(transform.before, this));
+    stack.push(async.apply(transform.before, this));
   }
+
+  //
+  // If transform.before was not pushed on the stack, optimizer needs
+  // to called with a reference to Pagelet.
+  //
+  stack.push(!stack.length ? async.apply(optimizer, this) : optimizer);
 
   //
   // Check if after listener is found. Add after emit to the stack.

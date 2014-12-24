@@ -168,4 +168,9 @@ describe('Pagelet', function () {
       assume(recur[0].prototype._parent).to.equal('parental');
     });
   });
+
+  describe('.optimize', function () {
+    it('should prepare an async call stack');
+    it('should provide optimizer with Pagelet reference if no transform:before event');
+  });
 });
