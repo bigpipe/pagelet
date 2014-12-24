@@ -1043,13 +1043,6 @@ Pagelet.optimize = function optimize(options, done) {
       , log = debug('pagelet:'+ name);
 
     //
-    // Map all dependencies to an absolute path or URL.
-    // @TODO this should not have to be repeated for each pagelet, ID
-    // is set to all childs as well :/
-    //
-    helpers.resolve(Pagelet, ['css', 'js', 'dependencies']);
-
-    //
     // Optimize was already performed on this pagelet, return early.
     //
     if (prototype.id) {
@@ -1099,6 +1092,11 @@ Pagelet.optimize = function optimize(options, done) {
     if (prototype.error) {
       temper.prefetch(prototype.error, path.extname(prototype.error).slice(1));
     }
+
+    //
+    // Map all dependencies to an absolute path or URL.
+    //
+    helpers.resolve(Pagelet, ['css', 'js', 'dependencies']);
 
     //
     // Find all child pagelets and optimize the found children.

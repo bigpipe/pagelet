@@ -138,7 +138,7 @@ describe('Pagelet', function () {
       assume(single.length).to.equal(0);
     });
 
-    it('does not do recursive pagelet discovery', function () {
+    it('does recursive pagelet discovery', function () {
       var recur = P.extend({
         pagelets: {
           child: P.extend({
@@ -151,8 +151,9 @@ describe('Pagelet', function () {
       }).children('multiple');
 
       assume(recur).is.an('array');
-      assume(recur.length).to.equal(1);
+      assume(recur.length).to.equal(2);
       assume(recur[0].prototype.name).to.equal('child');
+      assume(recur[1].prototype.name).to.equal('another');
     });
 
     it('sets the pagelets parent name on `_parent`', function () {
