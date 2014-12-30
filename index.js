@@ -56,9 +56,12 @@ function Pagelet(options) {
   writable('params', {});                           // Params extracted from the route.
   writable('enabled', []);                          // Contains all enabled pagelets.
   writable('disabled', []);                         // Contains all disable pagelets.
+  writable('_parent', null);                        // Name of parent pagelet (if any).
   writable('_active', null);                        // Are we active.
+  writable('_children', []);                        // Set of optimized children.
   writable('req', options.req);                     // Incoming HTTP request.
   writable('res', options.res);                     // Incoming HTTP response.
+  writable('_dependencies', null);                  // Dependencies for client.
   writable('temper', options.temper);               // Attach the Temper instance.
 
   readable('pipe', options.pipe);                   // Actual pipe instance.
@@ -339,6 +342,9 @@ Pagelet.writable('get', function get(done) {
 /**
  * Reset the instance to it's original state and initialize it.
  *
+ * @TODO not required by stand-alone pagelet, move to BigPipe?
+ * This also moves the bootstrap method in scope of configure.
+ *
  * @param {ServerRequest} req HTTP server request.
  * @param {ServerResponse} res HTTP server response.
  * @api private
@@ -357,7 +363,7 @@ Pagelet.readable('configure', function configure(req, res) {
   // TODO: document why each property is provided.
   // TODO: do not simply add one to the length?
   //
-  this.bootstrap = this.pipe.bootstrap(this, this.pagelets.bootstrap, {
+  this.bootstrap = this.pipe.bootstrap(this, {
     dependencies: dependencies,
     res: res,
     req: req
@@ -447,7 +453,7 @@ Pagelet.readable('has', function has(name, enabled) {
     return pagelet.name === name;
   });
 
-  var pagelets = this.pagelets
+  var pagelets = this._children
     , i = pagelets.length
     , pagelet;
 
@@ -551,7 +557,7 @@ Pagelet.readable('stringify', function stringify(data, replacer) {
  * @api private
  */
 Pagelet.readable('discover', function discover() {
-  if (!this.pagelets.length) return this.emit('discover');
+  if (!this._children.length) return this.emit('discover');
 
   var req = this.req
     , res = this.res
@@ -562,7 +568,7 @@ Pagelet.readable('discover', function discover() {
   // We need to do an async map/filter of the pagelets, in order to this as
   // efficient as possible we're going to use a reduce.
   //
-  async.reduce(this.pagelets, {
+  async.reduce(this._children, {
     disabled: [],
     enabled: []
   }, function reduce(memo, children, next) {
@@ -1049,14 +1055,6 @@ Pagelet.optimize = function optimize(options, done) {
       , log = debug('pagelet:'+ name);
 
     //
-    // Optimize was already performed on this pagelet, return early.
-    //
-    if (prototype.id) {
-      log('Skip optimizing, pagelet was already optimized');
-      return next(null, Pagelet);
-    }
-
-    //
     // Generate a unique ID used for real time connection lookups.
     //
     prototype.id = options.id || [1, 1, 1, 1].map(generator).join('-');
@@ -1124,7 +1122,7 @@ Pagelet.optimize = function optimize(options, done) {
       // Store the optimized children on the prototype, wrapping the Pagelet
       // in an array makes it a lot easier to work with conditional Pagelets.
       //
-      prototype.pagelets = children.map(function map(Pagelet) {
+      prototype._children = children.map(function map(Pagelet) {
         return Array.isArray(Pagelet) ? Pagelet : [Pagelet];
       });
 
