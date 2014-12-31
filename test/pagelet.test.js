@@ -44,23 +44,23 @@ describe('Pagelet', function () {
 
   it('can have reference to temper', function () {
     pagelet = new P({ temper: temper });
-    var property = Object.getOwnPropertyDescriptor(pagelet, 'temper');
+    var property = Object.getOwnPropertyDescriptor(pagelet, '_temper');
 
-    assume(pagelet.temper).to.be.an('object');
+    assume(pagelet._temper).to.be.an('object');
     assume(property.writable).to.equal(true);
-    assume(property.enumerable).to.equal(false);
+    assume(property.enumerable).to.equal(true);
     assume(property.configurable).to.equal(true);
   });
 
   it('can have reference to pipe instance', function () {
     pagelet = new P({ pipe: pipe });
-    var property = Object.getOwnPropertyDescriptor(pagelet, 'pipe');
+    var property = Object.getOwnPropertyDescriptor(pagelet, '_pipe');
 
-    assume(pagelet.pipe).to.be.an('object');
-    assume(pagelet.pipe).to.be.instanceof(Pipe);
-    assume(property.writable).to.equal(false);
-    assume(property.enumerable).to.equal(false);
-    assume(property.configurable).to.equal(false);
+    assume(pagelet._pipe).to.be.an('object');
+    assume(pagelet._pipe).to.be.instanceof(Pipe);
+    assume(property.writable).to.equal(true);
+    assume(property.enumerable).to.equal(true);
+    assume(property.configurable).to.equal(true);
   });
 
   describe('.on', function () {

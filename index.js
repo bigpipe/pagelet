@@ -6,7 +6,6 @@ var jstringify = require('json-stringify-safe')
   , debug = require('diagnostics')
   , dot = require('dot-component')
   , Route = require('routable')
-  , Stream = require('stream')
   , fuse = require('fusing')
   , async = require('async')
   , path = require('path');
@@ -45,31 +44,33 @@ function Pagelet(options) {
   this.fuse();
   options = options || {};
 
-  var writable = this.writable
-    , readable = this.readable;
-
   //
   // Use the temper instance on Pipe if available.
   //
-  if (options.pipe && options.pipe.temper) options.temper = options.pipe.temper;
+  if (options.pipe && options.pipe._temper) options.temper = options.pipe._temper;
 
-  writable('params', {});                           // Params extracted from the route.
-  writable('enabled', []);                          // Contains all enabled pagelets.
-  writable('disabled', []);                         // Contains all disable pagelets.
-  writable('_parent', null);                        // Name of parent pagelet (if any).
-  writable('_active', null);                        // Are we active.
-  writable('_children', []);                        // Set of optimized children.
-  writable('req', options.req);                     // Incoming HTTP request.
-  writable('res', options.res);                     // Incoming HTTP response.
-  writable('_dependencies', null);                  // Dependencies for client.
-  writable('temper', options.temper);               // Attach the Temper instance.
+  this._enabled = [];                             // Contains all enabled pagelets.
+  this._disabled = [];                            // Contains all disable pagelets.
+  this._active = null;                            // Are we active.
+  this._bootstrap = null;                         // Reference to bootstrap Pagelet.
+  this._req = options.req;                        // Incoming HTTP request.
+  this._res = options.res;                        // Incoming HTTP response.
+  this._pipe = options.pipe;                      // Actual pipe instance.
+  this._temper = options.temper;                  // Attach the Temper instance.
+  this._params = Object.create(null);             // Params extracted from the route.
 
-  readable('pipe', options.pipe);                   // Actual pipe instance.
-  readable('debug', debug('pagelet:'+ this.name));  // Namespaced debug method
+  this.debug = debug('pagelet:'+ this.name);      // Namespaced debug method
 }
 
 fuse(Pagelet, require('eventemitter3'));
-fuse(Pagelet, Stream, { emits: false });
+
+/**
+ * Unique id, useful for internal querying.
+ *
+ * @type {String}
+ * @public
+ */
+Pagelet.writable('id', null);
 
 /**
  * The name of this pagelet so it can checked to see if's enabled. In addition
@@ -121,15 +122,6 @@ Pagelet.writable('statusCode', 200);
  * @public
  */
 Pagelet.writable('pagelets', {});
-
-/**
- * Reference to the bootstrap pagelet, which is also a state keeper for
- * global request properties.
- *
- * @type {Object}
- * @private
- */
-Pagelet.writable('bootstrap', null);
 
 /**
  * Specify a mode that should be used for node client side rendering, this defaults
@@ -329,6 +321,30 @@ Pagelet.writable('dependencies', []);
 Pagelet.writable('directory', '');
 
 /**
+ * Reference to parent Pagelet name.
+ *
+ * @type {Object}
+ * @private
+ */
+Pagelet.writable('_parent', null);
+
+/**
+ * Set of optimized children Pagelet.
+ *
+ * @type {Object}
+ * @private
+ */
+Pagelet.writable('_children', {});
+
+/**
+ * Cataloged dependencies by extension.
+ *
+ * @type {Object}
+ * @private
+ */
+Pagelet.writable('_dependencies', {});
+
+/**
  * Default asynchronous get function. Override to provide specific data to the
  * render function.
  *
@@ -337,92 +353,6 @@ Pagelet.writable('directory', '');
  */
 Pagelet.writable('get', function get(done) {
   (global.setImmediate || global.setTimeout)(done);
-});
-
-/**
- * Reset the instance to it's original state and initialize it.
- *
- * @TODO not required by stand-alone pagelet, move to BigPipe?
- * This also moves the bootstrap method in scope of configure.
- *
- * @param {ServerRequest} req HTTP server request.
- * @param {ServerResponse} res HTTP server response.
- * @api private
- */
-Pagelet.readable('configure', function configure(req, res) {
-  this.req = req;
-  this.res = res;
-
-  //
-  // Add all required assets and dependencies to the HEAD of the page.
-  //
-  var dependencies = [];
-  this.pipe.compiler.page(this, dependencies);
-
-  //
-  // TODO: document why each property is provided.
-  // TODO: do not simply add one to the length?
-  //
-  this.bootstrap = this.pipe.bootstrap(this, {
-    dependencies: dependencies,
-    res: res,
-    req: req
-  });
-
-  //
-  // Ensure this parent pagelet has a flag to let the client side library know it
-  // should append the content of this pagelet to the target container. This is
-  // required as the body will also have our code and script fragments for other
-  // pagelets. Simply overwriting that content would result in removal of the
-  // fragments of other pagelets.
-  //
-  this._append = true;
-
-  // @TODO rel prefetch for resources that are used on the next page?
-  // @TODO cache manifest.
-
-  this.res.statusCode = this.statusCode;
-  this.res.setHeader('Content-Type', this.contentType);
-
-  //
-  // Emit a pagelet configuration event so plugins can hook in to this.
-  //
-  this.emit('configure', this);
-  res.once('close', this.emits('close'));
-
-  //
-  // If we have a `no_pagelet_js` flag, we should force a different
-  // rendering mode. This parameter is automatically added when we've
-  // detected that someone is browsing the site without JavaScript enabled.
-  //
-  // In addition to that, the other render modes only work if your browser
-  // supports trailing headers which where introduced in HTTP 1.1 so we need
-  // to make sure that this is something that the browser understands.
-  // Instead of checking just for `1.1` we want to make sure that it just
-  // tests for every http version above 1.0 as http 2.0 is just around the
-  // corner.
-  //
-  if (
-       'no_pagelet_js' in req.query && +req.query.no_pagelet_js === 1
-    || !(req.httpVersionMajor >= 1 && req.httpVersionMinor >= 1)
-  ) {
-    this.debug('Forcing `sync` instead of %s due lack of HTTP 1.1 or JS', this.mode);
-    this.mode = 'sync';
-  }
-
-  if (this.initialize) {
-    if (this.initialize.length) {
-      this.debug('Waiting for `initialize` method before rendering');
-      this.initialize(this.init.bind(this));
-    } else {
-      this.initialize();
-      this.init();
-    }
-  } else {
-    this.init();
-  }
-
-  return this;
 });
 
 /**
@@ -449,7 +379,7 @@ Pagelet.readable('child', function child(name) {
 Pagelet.readable('has', function has(name, enabled) {
   if (!name) return [];
 
-  if (enabled) return this.enabled.filter(function filter(pagelet) {
+  if (enabled) return this._enabled.filter(function filter(pagelet) {
     return pagelet.name === name;
   });
 
@@ -475,7 +405,7 @@ Pagelet.readable('has', function has(name, enabled) {
  * @api private
  */
 Pagelet.readable('init', function init() {
-  var method = this.req.method.toLowerCase()
+  var method = this._req.method.toLowerCase()
     , pagelet = this;
 
   //
@@ -484,8 +414,8 @@ Pagelet.readable('init', function init() {
   // these requests.
   //
   if (~operations.indexOf(method)) {
-    var pagelets = this.child(this.req.query._pagelet)
-      , reader = this.pipe.read(pagelet);
+    var pagelets = this.child(this._req.query._pagelet)
+      , reader = this._pipe.read(pagelet);
 
     this.debug('Processing %s request', method);
 
@@ -497,8 +427,8 @@ Pagelet.readable('init', function init() {
 
       if (!(method in Pagelet.prototype)) return next();
 
-      child = new Child({ temper: pagelet.temper });
-      child.conditional(pagelet.req, pagelets, function allowed(accepted) {
+      child = new Child({ temper: pagelet._temper });
+      child.conditional(pagelet._req, pagelets, function allowed(accepted) {
         if (!accepted) {
           if (child.destroy) child.destroy();
           return next();
@@ -559,10 +489,10 @@ Pagelet.readable('stringify', function stringify(data, replacer) {
 Pagelet.readable('discover', function discover() {
   if (!this._children.length) return this.emit('discover');
 
-  var req = this.req
-    , res = this.res
+  var req = this._req
+    , res = this._res
     , pagelet = this
-    , bootstrap = this.bootstrap;
+    , bootstrap = this._bootstrap;
 
   //
   // We need to do an async map/filter of the pagelets, in order to this as
@@ -581,7 +511,7 @@ Pagelet.readable('discover', function discover() {
     }, function work(next) {
       var Child = children.shift()
         , test = new Child({
-            pipe: pagelet.pipe,
+            pipe: pagelet._pipe,
             res: res,
             req: req
           });
@@ -601,11 +531,11 @@ Pagelet.readable('discover', function discover() {
       next(undefined, memo);
     });
   }, function discovered(err, children) {
-    pagelet.disabled = children.disabled;
-    pagelet.enabled = children.enabled.concat(pagelet);
+    pagelet._disabled = children.disabled;
+    pagelet._enabled = children.enabled.concat(pagelet);
 
-    pagelet.enabled.forEach(function initialize(pagelet) {
-      pagelet.bootstrap = bootstrap;
+    pagelet._enabled.forEach(function initialize(pagelet) {
+      pagelet._bootstrap = bootstrap;
       if ('function' === typeof pagelet.initialize) {
         pagelet.initialize();
       }
@@ -632,7 +562,7 @@ Pagelet.readable('sync', function render(err, data) {
   if (err) return this.end(err);
 
   var pagelet = this
-    , bootstrap = this.bootstrap
+    , bootstrap = this._bootstrap
     , view = bootstrap.html();
 
   //
@@ -642,17 +572,17 @@ Pagelet.readable('sync', function render(err, data) {
   // styling available.
   //
   this.once('discover', function discovered() {
-    var pagelets = pagelet.enabled.concat(pagelet.disabled);
+    var pagelets = pagelet._enabled.concat(pagelet._disabled);
 
     async.map(pagelets, function each(pagelet, next) {
       pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
 
       pagelet.render({ data: data }, next);
     }, function done(err, data) {
-      if (err) return pagelet.pipe.end(err, pagelet);
+      if (err) return pagelet._pipe.end(err, pagelet);
 
       pagelets.forEach(function forEach(pagelet, index) {
-        view = pagelet.pipe.inject(view, data[index].view, pagelet);
+        view = pagelet._pipe.inject(view, data[index].view, pagelet);
       });
 
       //
@@ -661,9 +591,9 @@ Pagelet.readable('sync', function render(err, data) {
       // flushed and that it can clean write queue and close the connection as
       // no more data is expected to arrive.
       //
-      bootstrap.n = pagelet.enabled.length;
+      bootstrap.n = pagelet._enabled.length;
       bootstrap.queue.push(view);
-      pagelet.pipe.end(null, pagelet);
+      pagelet._pipe.end(null, pagelet);
     });
   }).discover();
 
@@ -683,13 +613,13 @@ Pagelet.readable('async', function render(err, data) {
   if (err) return this.end(err);
 
   var pagelet = this
-    , bootstrap = this.bootstrap;
+    , bootstrap = this._bootstrap;
 
   this.once('discover', function discovered() {
-    async.each(pagelet.enabled.concat(pagelet.disabled), function (pagelet, next) {
+    async.each(pagelet._enabled.concat(pagelet._disabled), function (pagelet, next) {
       pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
 
-      data = pagelet.pipe.compiler.pagelet(pagelet);
+      data = pagelet._pipe._compiler.pagelet(pagelet);
       data.processed = ++bootstrap.n;
 
       pagelet.render({
@@ -697,13 +627,13 @@ Pagelet.readable('async', function render(err, data) {
       }, function rendered(err, content) {
         if (err) return next(err);
 
-        pagelet.pipe.write(pagelet, content, next);
+        pagelet._pipe.write(pagelet, content, next);
       });
-    }, pagelet.pipe.end.bind(pagelet.pipe, null, pagelet));
+    }, pagelet._pipe.end.bind(pagelet._pipe, null, pagelet));
   });
 
   bootstrap.queue.push(bootstrap.html());
-  this.pipe.flush(this, true);
+  this._pipe.flush(this, true);
   this.discover();
 
   return this.debug('Rendering the pagelets in `async` mode');
@@ -760,7 +690,7 @@ Pagelet.readable('render', function render(options, fn) {
 
   var context = options.context || this
     , data = options.data || {}
-    , temper = this.temper
+    , temper = this._temper
     , query = this.query
     , pagelet = this;
 
@@ -811,7 +741,7 @@ Pagelet.readable('render', function render(options, fn) {
     return pagelet;
   }
 
-  return this.conditional(this.req, options.pagelets, function auth(enabled) {
+  return this.conditional(this._req, options.pagelets, function auth(enabled) {
     if (!enabled) return fragment('');
 
     //
@@ -912,7 +842,7 @@ Pagelet.readable('conditional', function conditional(req, list, fn) {
  * @api public
  */
 Pagelet.readable('destroy', function destroy() {
-  this.temper = null;
+  this._temper = this._pipe = null;
   this.removeAllListeners();
 
   return this;
@@ -1008,30 +938,45 @@ Pagelet.optimize = function optimize(options, done) {
   }
 
   var stack = []
+    , Pagelet = this
     , pipe = options.pipe || {}
     , transform = options.transform || {}
-    , temper = pipe.temper || options.temper;
+    , temper = pipe._temper || options.temper;
 
   //
   // Check if before listener is found. Add before emit to the stack.
   // This async function will be called before optimize.
   //
   if (pipe._events && 'transform:pagelet:before' in pipe._events) {
-    stack.push(async.apply(transform.before, this));
+    stack.push(function run(next) {
+      var length = pipe._events['transform:pagelet:before'].length
+        , n = 0;
+
+      transform.before(Pagelet, function ran(error, Pagelet) {
+        if (error || ++n === length) return next(error, Pagelet);
+      });
+    });
   }
 
   //
   // If transform.before was not pushed on the stack, optimizer needs
   // to called with a reference to Pagelet.
   //
-  stack.push(!stack.length ? async.apply(optimizer, this) : optimizer);
+  stack.push(!stack.length ? async.apply(optimizer, Pagelet) : optimizer);
 
   //
   // Check if after listener is found. Add after emit to the stack.
   // This async function will be called after optimize.
   //
   if (pipe._events && 'transform:pagelet:after' in pipe._events) {
-    stack.push(async.apply(transform.after, this));
+    stack.push(function run(next) {
+      var length = pipe._events['transform:pagelet:after'].length
+        , n = 0;
+
+      transform.after(Pagelet, function ran(error, Pagelet) {
+        if (error || ++n === length) return next(error, Pagelet);
+      });
+    });
   }
 
   //
