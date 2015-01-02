@@ -969,7 +969,7 @@ Pagelet.optimize = function optimize(options, done) {
   // This async function will be called after optimize.
   //
   if (pipe._events && 'transform:pagelet:after' in pipe._events) {
-    stack.push(function run(next) {
+    stack.push(function run(Pagelet, next) {
       var length = pipe._events['transform:pagelet:after'].length || 1
         , n = 0;
 
