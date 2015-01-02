@@ -949,7 +949,7 @@ Pagelet.optimize = function optimize(options, done) {
   //
   if (pipe._events && 'transform:pagelet:before' in pipe._events) {
     stack.push(function run(next) {
-      var length = pipe._events['transform:pagelet:before'].length
+      var length = pipe._events['transform:pagelet:before'].length || 1
         , n = 0;
 
       transform.before(Pagelet, function ran(error, Pagelet) {
@@ -970,7 +970,7 @@ Pagelet.optimize = function optimize(options, done) {
   //
   if (pipe._events && 'transform:pagelet:after' in pipe._events) {
     stack.push(function run(next) {
-      var length = pipe._events['transform:pagelet:after'].length
+      var length = pipe._events['transform:pagelet:after'].length || 1
         , n = 0;
 
       transform.after(Pagelet, function ran(error, Pagelet) {
