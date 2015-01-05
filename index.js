@@ -58,7 +58,7 @@ function Pagelet(options) {
   this._params = options.params;                  // Params extracted from the route.
   this._temper = options.temper;                  // Attach the Temper instance.
   this._bootstrap = options.bootstrap;            // Reference to bootstrap Pagelet.
-  this._append = options.append || false;         // Append content or not.
+  this._append = options.append || false;         // Append content client-side.
 
   //
   // Set reference on the pagelet to the parent pagelet. A reference
