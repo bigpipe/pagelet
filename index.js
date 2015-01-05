@@ -60,14 +60,14 @@ function Pagelet(options) {
   this._bootstrap = options.bootstrap;            // Reference to bootstrap Pagelet.
   this._append = options.append || false;         // Append content client-side.
 
+  this.debug = debug('pagelet:'+ this.name);      // Namespaced debug method
+
   //
-  // Set reference on the pagelet to the parent pagelet. A reference
-  // to the parent name is set on the constructor object by
-  // optimize.
+  // Allow overriding the reference to parent pagelet.
+  // A reference to the parent is normally set on the
+  // constructor prototype by optimize.
   //
   if (options.parent) this._parent = options.parent;
-
-  this.debug = debug('pagelet:'+ this.name);             // Namespaced debug method
 }
 
 fuse(Pagelet, require('eventemitter3'));
