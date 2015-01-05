@@ -52,14 +52,22 @@ function Pagelet(options) {
   this._enabled = [];                             // Contains all enabled pagelets.
   this._disabled = [];                            // Contains all disable pagelets.
   this._active = null;                            // Are we active.
-  this._bootstrap = null;                         // Reference to bootstrap Pagelet.
   this._req = options.req;                        // Incoming HTTP request.
   this._res = options.res;                        // Incoming HTTP response.
   this._pipe = options.pipe;                      // Actual pipe instance.
+  this._params = options.params;                  // Params extracted from the route.
   this._temper = options.temper;                  // Attach the Temper instance.
-  this._params = Object.create(null);             // Params extracted from the route.
+  this._bootstrap = options.bootstrap;            // Reference to bootstrap Pagelet.
+  this._append = options.append || false;         // Append content or not.
 
-  this.debug = debug('pagelet:'+ this.name);      // Namespaced debug method
+  //
+  // Set reference on the pagelet to the parent pagelet. A reference
+  // to the parent name is set on the constructor object by
+  // optimize.
+  //
+  if (options.parent) this._parent = options.parent;
+
+  this.debug = debug('pagelet:'+ this.name);             // Namespaced debug method
 }
 
 fuse(Pagelet, require('eventemitter3'));
@@ -356,6 +364,19 @@ Pagelet.writable('get', function get(done) {
 });
 
 /**
+ * Get parameters that were extracted from the route.
+ *
+ * @type {Object}
+ * @public
+ */
+Pagelet.readable('params', {
+  enumerable: false,
+  get: function params() {
+    return this._params || this._bootstrap._params || Object.create(null);
+  }
+}, true);
+
+/**
  * Get and initialize a given child Pagelet.
  *
  * @param {String} name Name of the child pagelet.
@@ -427,7 +448,7 @@ Pagelet.readable('init', function init() {
 
       if (!(method in Pagelet.prototype)) return next();
 
-      child = new Child({ temper: pagelet._temper });
+      child = new Child({ pipe: pagelet._pipe });
       child.conditional(pagelet._req, pagelets, function allowed(accepted) {
         if (!accepted) {
           if (child.destroy) child.destroy();
@@ -491,8 +512,7 @@ Pagelet.readable('discover', function discover() {
 
   var req = this._req
     , res = this._res
-    , pagelet = this
-    , bootstrap = this._bootstrap;
+    , pagelet = this;
 
   //
   // We need to do an async map/filter of the pagelets, in order to this as
@@ -511,6 +531,7 @@ Pagelet.readable('discover', function discover() {
     }, function work(next) {
       var Child = children.shift()
         , test = new Child({
+            bootstrap: pagelet._bootstrap,
             pipe: pagelet._pipe,
             res: res,
             req: req
@@ -534,11 +555,8 @@ Pagelet.readable('discover', function discover() {
     pagelet._disabled = children.disabled;
     pagelet._enabled = children.enabled.concat(pagelet);
 
-    pagelet._enabled.forEach(function initialize(pagelet) {
-      pagelet._bootstrap = bootstrap;
-      if ('function' === typeof pagelet.initialize) {
-        pagelet.initialize();
-      }
+    pagelet._enabled.forEach(function initialize(child) {
+      if ('function' === typeof child.initialize) child.initialize();
     });
 
     pagelet.debug('Initialized all allowed pagelets');
@@ -885,7 +903,7 @@ Pagelet.on = function on(module) {
  * Discover all pagelets recursive. Fabricate will create constructable instances
  * from the provided value of prototype.pagelets.
  *
- * @param {Pagelet} parent Reference to the parent pagelet.
+ * @param {String} parent Reference to the parent pagelet name.
  * @return {Array} collection of pagelets instances.
  * @api public
  */
