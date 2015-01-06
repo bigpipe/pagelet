@@ -562,6 +562,8 @@ Pagelet.readable('discover', function discover() {
     pagelet.debug('Initialized all allowed pagelets');
     pagelet.emit('discover');
   });
+
+  return this;
 });
 
 /**
@@ -597,7 +599,7 @@ Pagelet.readable('sync', function render(err, data) {
 
       pagelet.render({ data: data }, next);
     }, function done(err, data) {
-      if (err) return pagelet._pipe.end(err, pagelet);
+      if (err) return pagelet._pipe.end(err);
 
       pagelets.forEach(function forEach(pagelet, index) {
         view = pagelet._pipe.inject(view, data[index].view, pagelet);
@@ -610,8 +612,7 @@ Pagelet.readable('sync', function render(err, data) {
       // no more data is expected to arrive.
       //
       bootstrap.n = pagelet._enabled.length;
-      bootstrap.queue.push(view);
-      pagelet._pipe.end(null, pagelet);
+      pagelet.write(view).end();
     });
   }).discover();
 
@@ -633,6 +634,13 @@ Pagelet.readable('async', function render(err, data) {
   var pagelet = this
     , bootstrap = this._bootstrap;
 
+  //
+  // Flush the initial headers asap so the browser can start detect encoding
+  // start downloading assets and prepare for rendering additional pagelets.
+  //
+  bootstrap.flush();
+  this.once('end', this.end, this);
+
   this.once('discover', function discovered() {
     async.each(pagelet._enabled.concat(pagelet._disabled), function (pagelet, next) {
       pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
@@ -645,14 +653,10 @@ Pagelet.readable('async', function render(err, data) {
       }, function rendered(err, content) {
         if (err) return next(err);
 
-        pagelet._pipe.write(pagelet, content, next);
+        pagelet.write(content, next);
       });
-    }, pagelet._pipe.end.bind(pagelet._pipe, null, pagelet));
-  });
-
-  bootstrap.queue.push(bootstrap.html());
-  this._pipe.flush(this, true);
-  this.discover();
+    }, pagelet.emits('end'));
+  }).discover();
 
   return this.debug('Rendering the pagelets in `async` mode');
 });
@@ -668,6 +672,78 @@ Pagelet.readable('async', function render(err, data) {
  */
 Pagelet.readable('pipeline', function render(err, data) {
   throw new Error('Not Implemented');
+});
+
+/**
+ * Process the pagelet for an async or pipeline based render flow.
+ *
+ * @param {Mixed} fragment Content returned from Pagelet.render().
+ * @param {Function} fn Optional callback to be called when data has been written.
+ * @returns {Pagelet} fluent interface.
+ * @api private
+ */
+Pagelet.readable('write', function write(fragment, fn) {
+  if (this._res.finished) {
+    fn(new Error('Response was closed, unable to write Pagelet'));
+    return this;
+  }
+
+  if (fn) this._bootstrap.once('flushed', fn);
+  this.debug('Queueing HTML fragment');
+  this._bootstrap.queue(fragment).flush();
+
+  return this;
+});
+
+/**
+ * Close the connection once all pagelets are sent.
+ *
+ * @param {Error} err Optional error argument to trigger the error pagelet.
+ * @returns {Boolean} Closed the connection.
+ * @api private
+ */
+Pagelet.readable('end', function end(err) {
+  //
+  // The connection was already closed, no need to further process it.
+  //
+  if (this._res.finished || this._bootstrap.ended) {
+    this.debug('Pagelet has finished, ignoring extra .end call');
+    return true;
+  }
+
+  //
+  // We've received an error. We need to close down parent pagelet and
+  // display a 500 error pagelet instead.
+  //
+  // @TODO handle the case when we've already flushed the initial bootstrap code
+  // to the client and we're presented with an error.
+  //
+  if (err) {
+    this.emit('close', err);
+    this.debug('Captured an error: %s, displaying error pagelet instead', err);
+    this._pipe.status(this._req, this._res, 500, err);
+    return this._bootstrap.ended = true;
+  }
+
+  //
+  // Do not close the connection before the pagelet has sent headers.
+  //
+  if (this._bootstrap.n < this._enabled.length) {
+    this.debug('Not all pagelets have been written, (%s out of %s)',
+      this._bootstrap.n, this._enabled.length
+    );
+    return false;
+  }
+
+  //
+  // Everything is processed, close the connection and clean up references.
+  //
+  this._bootstrap.flush();
+  this._res.end();
+  this.emit('close');
+
+  this.debug('Closed the connection');
+  return this._bootstrap.ended = true;
 });
 
 /**
