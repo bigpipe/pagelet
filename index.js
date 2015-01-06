@@ -582,8 +582,10 @@ Pagelet.readable('sync', function render(err, data) {
   if (err) return this.end(err);
 
   var pagelet = this
-    , bootstrap = this._bootstrap
-    , view = bootstrap.html();
+    , view = this._bootstrap.render();
+
+  this.debug('Processing the pagelets in `sync` mode');
+  this.once('end', this.end, this);
 
   //
   // Because we're synchronously rendering the pagelets we need to discover
@@ -591,7 +593,7 @@ Pagelet.readable('sync', function render(err, data) {
   // the CSS files of the enabled pagelets in the HEAD of the page so there is
   // styling available.
   //
-  this.once('discover', function discovered() {
+  return this.once('discover', function discovered() {
     var pagelets = pagelet._enabled.concat(pagelet._disabled);
 
     async.map(pagelets, function each(pagelet, next) {
@@ -605,18 +607,9 @@ Pagelet.readable('sync', function render(err, data) {
         view = pagelet._pipe.inject(view, data[index].view, pagelet);
       });
 
-      //
-      // We need to bump the pagelet.res.n to the length of the enabled pagelets
-      // to trick the end function in to believing that ALL pagelets have been
-      // flushed and that it can clean write queue and close the connection as
-      // no more data is expected to arrive.
-      //
-      bootstrap.n = pagelet._enabled.length;
-      pagelet.write(view).end();
+      pagelet.write(view, pagelet._children.length, pagelet.emits('end'));
     });
   }).discover();
-
-  return this.debug('Rendering the pagelets in `sync` mode');
 });
 
 /**
@@ -632,33 +625,32 @@ Pagelet.readable('async', function render(err, data) {
   if (err) return this.end(err);
 
   var pagelet = this
-    , bootstrap = this._bootstrap;
+    , processed = 0;
+
+  this.debug('Processing the pagelets in `async` mode');
+  this.once('end', this.end, this);
 
   //
   // Flush the initial headers asap so the browser can start detect encoding
   // start downloading assets and prepare for rendering additional pagelets.
   //
-  bootstrap.flush();
-  this.once('end', this.end, this);
-
-  this.once('discover', function discovered() {
+  this._bootstrap.flush();
+  return this.once('discover', function discovered() {
     async.each(pagelet._enabled.concat(pagelet._disabled), function (pagelet, next) {
       pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
 
       data = pagelet._pipe._compiler.pagelet(pagelet);
-      data.processed = ++bootstrap.n;
+      data.processed = ++processed;
 
       pagelet.render({
         data: data
       }, function rendered(err, content) {
         if (err) return next(err);
 
-        pagelet.write(content, next);
+        pagelet.write(content, 1, next);
       });
     }, pagelet.emits('end'));
   }).discover();
-
-  return this.debug('Rendering the pagelets in `async` mode');
 });
 
 /**
@@ -678,21 +670,20 @@ Pagelet.readable('pipeline', function render(err, data) {
  * Process the pagelet for an async or pipeline based render flow.
  *
  * @param {Mixed} fragment Content returned from Pagelet.render().
- * @param {Function} fn Optional callback to be called when data has been written.
+ * @param {Number} n Amount of pagelets that were written to the queue.
+ * @param {Function} fn Callback to be called when data has been written.
  * @returns {Pagelet} fluent interface.
  * @api private
  */
-Pagelet.readable('write', function write(fragment, fn) {
-  if (this._res.finished) {
-    fn(new Error('Response was closed, unable to write Pagelet'));
-    return this;
-  }
+Pagelet.readable('write', function write(fragment, n, fn) {
+  if (this._res.finished) return fn(
+    new Error('Response was closed, unable to write Pagelet')
+  );
 
-  if (fn) this._bootstrap.once('flushed', fn);
+  if (fn) this._bootstrap.once('flush', fn);
+
   this.debug('Queueing HTML fragment');
-  this._bootstrap.queue(fragment).flush();
-
-  return this;
+  this._bootstrap.queue(fragment, n).flush();
 });
 
 /**
@@ -706,7 +697,7 @@ Pagelet.readable('end', function end(err) {
   //
   // The connection was already closed, no need to further process it.
   //
-  if (this._res.finished || this._bootstrap.ended) {
+  if (this._res.finished) {
     this.debug('Pagelet has finished, ignoring extra .end call');
     return true;
   }
@@ -722,15 +713,15 @@ Pagelet.readable('end', function end(err) {
     this.emit('close', err);
     this.debug('Captured an error: %s, displaying error pagelet instead', err);
     this._pipe.status(this._req, this._res, 500, err);
-    return this._bootstrap.ended = true;
+    return true;
   }
 
   //
-  // Do not close the connection before the pagelet has sent headers.
+  // Do not close the connection before all pagelets are send.
   //
-  if (this._bootstrap.n < this._enabled.length) {
+  if (this._bootstrap.length) {
     this.debug('Not all pagelets have been written, (%s out of %s)',
-      this._bootstrap.n, this._enabled.length
+      this._bootstrap.length, this._children.length
     );
     return false;
   }
@@ -743,7 +734,7 @@ Pagelet.readable('end', function end(err) {
   this.emit('close');
 
   this.debug('Closed the connection');
-  return this._bootstrap.ended = true;
+  return true;
 });
 
 /**
