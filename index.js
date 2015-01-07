@@ -377,6 +377,17 @@ Pagelet.readable('params', {
 }, true);
 
 /**
+ * Report the length of the queue (e.g. amount of children). The length
+ * is increased with one as the reporting pagelet is part of the queue.
+ *
+ * @return {Number} Length of queue
+ * @api private
+ */
+Pagelet.set('length', function length() {
+  return this._children.length + 1;
+});
+
+/**
  * Get and initialize a given child Pagelet.
  *
  * @param {String} name Name of the child pagelet.
@@ -508,7 +519,7 @@ Pagelet.readable('stringify', function stringify(data, replacer) {
  * @api private
  */
 Pagelet.readable('discover', function discover() {
-  if (!this._children.length) return this.emit('discover');
+  if (!this.length) return this.emit('discover');
 
   var req = this._req
     , res = this._res
@@ -607,7 +618,7 @@ Pagelet.readable('sync', function render(err, data) {
         view = pagelet._pipe.inject(view, data[index].view, pagelet);
       });
 
-      pagelet.write(view, pagelet._children.length, pagelet.emits('end'));
+      pagelet.write(view, pagelet.length, pagelet.emits('end'));
     });
   }).discover();
 });
@@ -721,7 +732,7 @@ Pagelet.readable('end', function end(err) {
   //
   if (this._bootstrap.length) {
     this.debug('Not all pagelets have been written, (%s out of %s)',
-      this._bootstrap.length, this._children.length
+      this._bootstrap.length, this.length
     );
     return false;
   }
