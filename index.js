@@ -990,7 +990,7 @@ Pagelet.children = function children(parent, stack) {
     , log = debug('pagelet:'+ parent);
 
   stack = stack || [];
-  if (!parent || !pagelets || !Object.keys(pagelets).length) return stack;
+  if (!pagelets || !Object.keys(pagelets).length) return stack;
 
   return fabricate(pagelets, {
     source: this.prototype.directory,
@@ -1037,7 +1037,7 @@ Pagelet.optimize = function optimize(options, done) {
     , Pagelet = this
     , pipe = options.pipe || {}
     , transform = options.transform || {}
-    , temper = pipe._temper || options.temper;
+    , temper = options.temper || pipe._temper;
 
   //
   // Check if before listener is found. Add before emit to the stack.
@@ -1150,10 +1150,11 @@ Pagelet.optimize = function optimize(options, done) {
       if (Array.isArray(Child)) return async.map(Child, map, step);
 
       Child.optimize({
+        temper: temper,
         pipe: pipe,
         transform: {
-          before: pipe.emits('transform:pagelet:before'),
-          after: pipe.emits('transform:pagelet:after')
+          before: pipe.emits && pipe.emits('transform:pagelet:before'),
+          after: pipe.emits && pipe.emits('transform:pagelet:after')
         }
       }, step);
     }, function optimized(error, children) {
