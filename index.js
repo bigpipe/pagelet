@@ -372,7 +372,7 @@ Pagelet.writable('get', function get(done) {
 Pagelet.readable('params', {
   enumerable: false,
   get: function params() {
-    return this._params || (this._bootstrap || {})._params || Object.create(null);
+    return this._params || this._bootstrap._params || Object.create(null);
   }
 }, true);
 
