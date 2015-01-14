@@ -1128,7 +1128,9 @@ Pagelet.optimize = function optimize(options, done) {
       prototype.view = path.resolve(prototype.directory, prototype.view);
       temper.prefetch(prototype.view, prototype.engine);
     } else if (!(prototype.statusCode >= 300 && prototype.statusCode < 400)) {
-      throw new Error('The '+ name +' pagelet for path '+ router +' should have a .view property.');
+      return next(new Error(
+        'The '+ name +' pagelet for path '+ router +' should have a .view property.'
+      ));
     }
 
     //
