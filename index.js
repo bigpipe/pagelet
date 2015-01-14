@@ -1037,19 +1037,21 @@ Pagelet.optimize = function optimize(options, done) {
     , Pagelet = this
     , pipe = options.pipe || {}
     , transform = options.transform || {}
-    , temper = options.temper || pipe._temper;
+    , temper = options.temper || pipe._temper
+    , before, after;
 
   //
   // Check if before listener is found. Add before emit to the stack.
   // This async function will be called before optimize.
   //
   if (pipe._events && 'transform:pagelet:before' in pipe._events) {
+    before = pipe._events['transform:pagelet:before'].length || 1;
+
     stack.push(function run(next) {
-      var length = pipe._events['transform:pagelet:before'].length || 1
-        , n = 0;
+      var n = 0;
 
       transform.before(Pagelet, function ran(error, Pagelet) {
-        if (error || ++n === length) return next(error, Pagelet);
+        if (error || ++n === before) return next(error, Pagelet);
       });
     });
   }
@@ -1065,12 +1067,13 @@ Pagelet.optimize = function optimize(options, done) {
   // This async function will be called after optimize.
   //
   if (pipe._events && 'transform:pagelet:after' in pipe._events) {
+    after = pipe._events['transform:pagelet:after'].length || 1;
+
     stack.push(function run(Pagelet, next) {
-      var length = pipe._events['transform:pagelet:after'].length || 1
-        , n = 0;
+      var n = 0;
 
       transform.after(Pagelet, function ran(error, Pagelet) {
-        if (error || ++n === length) return next(error, Pagelet);
+        if (error || ++n === after) return next(error, Pagelet);
       });
     });
   }
