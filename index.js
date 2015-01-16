@@ -909,6 +909,11 @@ Pagelet.readable('render', function render(options, fn) {
 Pagelet.readable('conditional', function conditional(req, list, fn) {
   var pagelet = this;
 
+  if ('function' !== typeof fn) {
+    fn = list
+    list = [];
+  }
+
   /**
    * Callback for the `pagelet.if` function to see if we're enabled or disabled.
    *
