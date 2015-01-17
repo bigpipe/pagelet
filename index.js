@@ -592,8 +592,7 @@ Pagelet.readable('discover', function discover() {
 Pagelet.readable('sync', function render(err, data) {
   if (err) return this.end(err);
 
-  var pagelet = this
-    , view = this._bootstrap.render();
+  var pagelet = this;
 
   this.debug('Processing the pagelets in `sync` mode');
   this.once('end', this.end, this);
@@ -605,20 +604,18 @@ Pagelet.readable('sync', function render(err, data) {
   // styling available.
   //
   return this.once('discover', function discovered() {
-    var pagelets = pagelet._enabled.concat(pagelet._disabled);
-
-    async.map(pagelets, function each(pagelet, next) {
+    async.each(pagelet._enabled.concat(pagelet._disabled), function each(pagelet, next) {
       pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
 
-      pagelet.render({ data: data }, next);
-    }, function done(err, data) {
-      if (err) return pagelet._pipe.end(err);
+      pagelet.render({ mode: 'sync', data: data }, function rendered(err, content) {
+        if (err) return next(err);
 
-      pagelets.forEach(function forEach(pagelet, index) {
-        view = pagelet._pipe.inject(view, data[index].view, pagelet);
+        pagelet.write(pagelet.name, content);
+        next();
       });
-
-      pagelet.write(view, pagelet.length, pagelet.emits('end'));
+    }, function done(err) {
+      if (err) return pagelet.end(err);
+      pagelet._bootstrap.reduce().flush(pagelet.emits('end'));
     });
   }).discover();
 });
@@ -658,7 +655,7 @@ Pagelet.readable('async', function render(err, data) {
       }, function rendered(err, content) {
         if (err) return next(err);
 
-        pagelet.write(content, 1, next);
+        pagelet.write(pagelet.name, content).flush(next);
       });
     }, pagelet.emits('end'));
   }).discover();
@@ -682,19 +679,12 @@ Pagelet.readable('pipeline', function render(err, data) {
  *
  * @param {Mixed} fragment Content returned from Pagelet.render().
  * @param {Number} n Amount of pagelets that were written to the queue.
- * @param {Function} fn Callback to be called when data has been written.
- * @returns {Pagelet} fluent interface.
+ * @returns {Bootstrap} Reference to bootstrap pagelet.
  * @api private
  */
-Pagelet.readable('write', function write(fragment, n, fn) {
-  if (this._res.finished) return fn(
-    new Error('Response was closed, unable to write Pagelet')
-  );
-
-  if (fn) this._bootstrap.once('flush', fn);
-
+Pagelet.readable('write', function write(name, fragment) {
   this.debug('Queueing HTML fragment');
-  this._bootstrap.queue(fragment, n).flush();
+  return this._bootstrap.queue(name, fragment);
 });
 
 /**
@@ -740,9 +730,8 @@ Pagelet.readable('end', function end(err) {
   //
   // Everything is processed, close the connection and clean up references.
   //
-  this._bootstrap.flush();
+  this._bootstrap.flush(this.emits('close'));
   this._res.end();
-  this.emit('close');
 
   this.debug('Closed the connection');
   return true;
@@ -785,6 +774,7 @@ Pagelet.readable('render', function render(options, fn) {
   options = options || {};
 
   var context = options.context || this
+    , mode = options.mode || 'async'
     , data = options.data || {}
     , temper = this._temper
     , query = this.query
@@ -801,11 +791,7 @@ Pagelet.readable('render', function render(options, fn) {
     var active = pagelet.active;
 
     if (!active) content = '';
-
-    if (pagelet.mode === 'sync') {
-      data.view = content;
-      return fn.call(context, undefined, data);
-    }
+    if (mode === 'sync') return fn.call(context, undefined, content);
 
     data.id = data.id || pagelet.id;                      // Pagelet id.
     data.mode = data.mode || pagelet.mode;                // Pagelet render mode.
@@ -885,7 +871,7 @@ Pagelet.readable('render', function render(options, fn) {
       //
       // Add queried parts of data, so the client-side script can use it.
       //
-      if ('object' === typeof result && Array.isArray(query)) {
+      if ('object' === typeof result && Array.isArray(query) && query.length) {
         data.data = query.reduce(function find(memo, q) {
           memo[q] = dot.get(result, q);
           return memo;
