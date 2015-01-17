@@ -594,8 +594,8 @@ Pagelet.readable('sync', function render(err, data) {
 
   var pagelet = this;
 
-  this.debug('Processing the pagelets in `sync` mode');
-  this.once('end', this.end, this);
+  pagelet.debug('Processing the pagelets in `sync` mode');
+  pagelet.once('end', pagelet.end, pagelet);
 
   //
   // Because we're synchronously rendering the pagelets we need to discover
@@ -603,7 +603,7 @@ Pagelet.readable('sync', function render(err, data) {
   // the CSS files of the enabled pagelets in the HEAD of the page so there is
   // styling available.
   //
-  return this.once('discover', function discovered() {
+  pagelet.once('discover', function discovered() {
     async.each(pagelet._enabled.concat(pagelet._disabled), function each(pagelet, next) {
       pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
 
@@ -632,33 +632,32 @@ Pagelet.readable('sync', function render(err, data) {
 Pagelet.readable('async', function render(err, data) {
   if (err) return this.end(err);
 
-  var pagelet = this
-    , processed = 0;
+  var pagelet = this;
 
-  this.debug('Processing the pagelets in `async` mode');
-  this.once('end', this.end, this);
+  pagelet.debug('Processing the pagelets in `async` mode');
+  pagelet.once('end', pagelet.end, pagelet);
 
   //
   // Flush the initial headers asap so the browser can start detect encoding
   // start downloading assets and prepare for rendering additional pagelets.
   //
-  this._bootstrap.flush();
-  return this.once('discover', function discovered() {
-    async.each(pagelet._enabled.concat(pagelet._disabled), function (pagelet, next) {
-      pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
+  pagelet._bootstrap.flush(function flushed(error) {
+    if (error) return pagelet.emit('end', error);
 
-      data = pagelet._pipe._compiler.pagelet(pagelet);
-      data.processed = ++processed;
+    pagelet.once('discover', function discovered() {
+      async.each(pagelet._enabled.concat(pagelet._disabled), function (pagelet, next) {
+        pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
 
-      pagelet.render({
-        data: data
-      }, function rendered(err, content) {
-        if (err) return next(err);
+        pagelet.render({
+          data: pagelet._pipe._compiler.pagelet(pagelet)
+        }, function rendered(err, content) {
+          if (err) return next(err);
 
-        pagelet.write(pagelet.name, content).flush(next);
-      });
-    }, pagelet.emits('end'));
-  }).discover();
+          pagelet.write(pagelet.name, content).flush(next);
+        });
+      }, pagelet.emits('end'));
+    }).discover();
+  });
 });
 
 /**
@@ -677,8 +676,8 @@ Pagelet.readable('pipeline', function render(err, data) {
 /**
  * Process the pagelet for an async or pipeline based render flow.
  *
+ * @param {String} name Pagelet name
  * @param {Mixed} fragment Content returned from Pagelet.render().
- * @param {Number} n Amount of pagelets that were written to the queue.
  * @returns {Bootstrap} Reference to bootstrap pagelet.
  * @api private
  */
@@ -798,6 +797,7 @@ Pagelet.readable('render', function render(options, fn) {
     data.remove = active ? false : pagelet.remove;        // Remove from DOM.
     data.parent = pagelet._parent;                        // Send parent name along.
     data.append = pagelet._append;                        // Content should be appended.
+    data.remaining = pagelet._bootstrap.length;           // Remaining pagelets number.
     data.hash = {
       error: temper.fetch(pagelet.error).hash.client,     // MD5 hash of error view.
       client: temper.fetch(pagelet.view).hash.client      // MD5 hash of client view.
