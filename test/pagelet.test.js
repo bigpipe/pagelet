@@ -2,16 +2,18 @@ describe('Pagelet', function () {
   'use strict';
 
   var Pagelet = require('../').extend({ name: 'test' })
-    , custom = '/unexisting/absolute/path/to/prepend'
+    , Temper = require('temper')
+    , Pipe = require('bigpipe')
     , assume = require('assume')
-    , pagelet
-    , P;
+    , server = require('http').createServer()
+    , pagelet, P;
 
   //
   // A lazy mans temper, we just want ignore all temper actions sometimes
   // because our pagelet is not exported using `.on(module)`
   //
-  var temper = { prefetch: function () {} };
+  var temper = new Temper
+    , pipe = new Pipe(server);
 
   beforeEach(function () {
     P = Pagelet.extend({
@@ -25,19 +27,40 @@ describe('Pagelet', function () {
       ]
     });
 
-    pagelet = new P();
+    pagelet = new P;
   });
 
   afterEach(function each() {
     pagelet = null;
   });
 
-  it('rendering is asynchronously', function (done) {
+  it('rendering is asynchronous', function (done) {
     pagelet.get(pagelet.emits('called'));
 
     // Listening only till after the event is potentially emitted, will ensure
-    // callbacks are called asynchronously by pagelet#render.
+    // callbacks are called asynchronously by pagelet.render.
     pagelet.on('called', done);
+  });
+
+  it('can have reference to temper', function () {
+    pagelet = new P({ temper: temper });
+    var property = Object.getOwnPropertyDescriptor(pagelet, '_temper');
+
+    assume(pagelet._temper).to.be.an('object');
+    assume(property.writable).to.equal(true);
+    assume(property.enumerable).to.equal(true);
+    assume(property.configurable).to.equal(true);
+  });
+
+  it('can have reference to pipe instance', function () {
+    pagelet = new P({ pipe: pipe });
+    var property = Object.getOwnPropertyDescriptor(pagelet, '_pipe');
+
+    assume(pagelet._pipe).to.be.an('object');
+    assume(pagelet._pipe).to.be.instanceof(Pipe);
+    assume(property.writable).to.equal(true);
+    assume(property.enumerable).to.equal(true);
+    assume(property.configurable).to.equal(true);
   });
 
   describe('.on', function () {
@@ -61,205 +84,58 @@ describe('Pagelet', function () {
       assume(P.prototype.view).to.equal(__dirname +'/fixtures/view.html');
     });
 
-    it('still allows extending', function (next) {
-      assume(P.prototype.css).to.be.a('string');
-
-      P.on(module);
-      assume(P.prototype.css).to.be.a('array');
-
-      var Y = P.extend({ foo: 'bar' });
-      Y.optimize(function (err) {
-        assume(Y.prototype.view).to.equal(__dirname +'/fixtures/view.html');
-        next(err);
-      });
-    });
-
     it('resolves the `error` view');
-    it('resolves the `css` files in to an array');
-    it('resolves the `js` files in to an array');
-    it('resolves the `dependencies` files in to an array');
   });
 
-  describe('.resolve', function () {
-    it('is a function', function () {
-      assume(Pagelet.resolve).to.be.a('function');
-      assume(P.resolve).to.be.a('function');
-      assume(Pagelet.resolve).to.equal(P.resolve);
+  describe('.discover', function () {
+    it('emits discover and returns immediatly if the parent pagelet has no children', function (done) {
+      pagelet.once('discover', done);
+      pagelet.discover();
     });
 
-    it('will resolve provided property on prototype', function () {
-      var result = P.resolve('css');
+    /* Disabled for now, might return before 1.0.0
+    it('initializes pagelets by allocating from the Pagelet.freelist', function (done) {
+      var Hero = require(__dirname + '/fixtures/pagelets/hero').optimize(app.temper)
+        , Faq = require(__dirname + '/fixtures/pages/faq').extend({ pagelets: [ Hero ] })
+        , pageletFreelist = sinon.spy(Hero.freelist, 'alloc')
+        , faq = new Faq(app);
 
-      assume(result).to.equal(P);
-      assume(P.prototype.css).to.be.an('array');
-      assume(P.prototype.css.length).to.equal(1);
-      assume(P.prototype.css[0]).to.equal(__dirname + '/fixtures/style.css');
-    });
-
-    it('can resolve multiple properties at once', function () {
-      P.resolve(['css', 'js']);
-
-      assume(P.prototype.css).to.be.an('array');
-      assume(P.prototype.js).to.be.an('array');
-      assume(P.prototype.css.length).to.equal(1);
-      assume(P.prototype.js.length).to.equal(1);
-    });
-
-    it('can be provided with a custom source directory', function () {
-      P.resolve('css', custom);
-
-      assume(P.prototype.css[0]).to.equal(custom + '/fixtures/style.css');
-    });
-
-    it('only resolves local files', function () {
-      P.resolve('js', custom);
-
-      assume(P.prototype.js[0]).to.not.include(custom);
-      assume(P.prototype.js[0]).to.equal('//cdnjs.cloudflare.com/ajax/libs/d3/3.4.8/d3.min.js');
-    });
-
-    it('can handle property values that are already an array', function () {
-      P.resolve('dependencies', custom);
-
-      assume(P.prototype.dependencies.length).to.equal(2);
-      assume(P.prototype.dependencies[0]).to.not.include(custom);
-      assume(P.prototype.dependencies[0]).to.equal('http://code.jquery.com/jquery-2.0.0.js');
-      assume(P.prototype.dependencies[1]).to.equal(custom + '/fixtures/custom.js');
-    });
-
-    it('removes undefined values from the array before processing', function () {
-      var Undef = P.extend({
-        dependencies: P.prototype.dependencies.concat(
-          undefined
-        )
+      faq.once('discover', function () {
+        assume(pageletFreelist).to.be.calledOnce;
+        done();
       });
 
-      assume(Undef.prototype.dependencies.length).to.equal(3);
-
-      Undef.resolve('dependencies', custom);
-      assume(Undef.prototype.dependencies.length).to.equal(2);
-      assume(Undef.prototype.dependencies).to.not.include(undefined);
-    });
-
-    it('can be overriden', function () {
-      P.resolve = function () {
-        throw new Error('fucked');
-      };
-
-      P.on({});
-    });
+      faq.discover();
+    });*/
   });
 
-  describe('.optimize', function () {
+  describe('.children', function () {
     it('is a function', function () {
-      assume(Pagelet.optimize).to.be.a('function');
-      assume(P.optimize).to.be.a('function');
-      assume(Pagelet.optimize).to.equal(P.optimize);
-    });
-
-    it('uses the supplied temper for prefetching', function (next) {
-      var calls = 0;
-      P.optimize({
-        temper: {
-          prefetch: function () {
-            ++calls;
-          }
-        }
-      }, function (err) {
-        if (err) return next(err);
-
-        assume(calls).to.equal(2);
-        next();
-      });
-    });
-
-    it('resolves the view', function (next) {
-      assume(P.prototype.view).to.equal('fixtures/view.html');
-      P.optimize({}, function () {
-        assume(P.prototype.view).to.equal(__dirname +'/fixtures/view.html');
-        next();
-      });
-    });
-
-    it('prefetches the `view`');
-    it('prefetches the `error` view');
-
-    it('allows rpc as a string', function (next) {
-      var X = P.extend({
-        RPC: 'fixtures, bar',
-        fixtures: function () {},
-        bar: function () {}
-      });
-
-      X.optimize({ temper: temper }, function (err) {
-        if (err) return next(err);
-
-        assume(X.prototype.RPC).to.be.a('array');
-        assume(X.prototype.RPC).to.have.length(2);
-        assume(X.prototype.RPC).to.include('bar');
-        assume(X.prototype.RPC).to.include('fixtures');
-
-        next();
-      });
-    });
-
-    it('checks if all rpc functions are available', function (next) {
-      var X = P.extend({
-        RPC: 'fixtures, bar',
-        bar: function () {}
-      });
-
-      X.optimize({ temper: temper }, function (err) {
-        assume(err).to.be.a('error');
-        assume(err.message).to.include('fixtures');
-
-        next();
-      });
-    });
-
-    it('allows lowercase rpc', function (next) {
-      var X = P.extend({
-        rpc: ['fixtures', 'bar'],
-        bar: function () {}
-      });
-
-      X.optimize({ temper: temper }, function (err) {
-        assume(err).to.be.a('error');
-        assume(err.message).to.include('fixtures');
-
-        next();
-      });
-    });
-  });
-
-  describe('.traverse', function () {
-    it('is a function', function () {
-      assume(Pagelet.traverse).to.be.a('function');
-      assume(P.traverse).to.be.a('function');
-      assume(Pagelet.traverse).to.equal(P.traverse);
+      assume(Pagelet.children).to.be.a('function');
+      assume(P.children).to.be.a('function');
+      assume(Pagelet.children).to.equal(P.children);
     });
 
     it('returns an array', function () {
-      var one = P.traverse()
+      var one = P.children()
         , recur = P.extend({
             pagelets: {
               child: P.extend({ name: 'child' })
             }
-          }).traverse('this one');
+          }).children('this one');
 
       assume(one).to.be.an('array');
-      assume(one.length).to.equal(1);
+      assume(one.length).to.equal(0);
 
       assume(recur).to.be.an('array');
-      assume(recur.length).to.equal(2);
+      assume(recur.length).to.equal(1);
     });
 
-    it('will at least return the pagelet', function () {
-      var single = P.traverse();
+    it('will only return children of the pagelet', function () {
+      var single = P.children();
 
-      assume(single[0].prototype._parent).to.equal(undefined);
-      assume(single[0].prototype.directory).to.equal(__dirname);
-      assume(single[0].prototype.view).to.equal('fixtures/view.html');
+      assume(single).to.be.an('array');
+      assume(single.length).to.equal(0);
     });
 
     it('does recursive pagelet discovery', function () {
@@ -272,13 +148,12 @@ describe('Pagelet', function () {
             }
           }),
         }
-      }).traverse('multiple');
+      }).children('multiple');
 
       assume(recur).is.an('array');
-      assume(recur.length).to.equal(3);
-
-      assume(recur[1].prototype.name).to.equal('child');
-      assume(recur[2].prototype.name).to.equal('another');
+      assume(recur.length).to.equal(2);
+      assume(recur[0].prototype.name).to.equal('child');
+      assume(recur[1].prototype.name).to.equal('another');
     });
 
     it('sets the pagelets parent name on `_parent`', function () {
@@ -288,10 +163,14 @@ describe('Pagelet', function () {
             name: 'child'
           })
         }
-      }).traverse('parental');
+      }).children('parental');
 
-      assume(recur[0].prototype._parent).to.equal(undefined);
-      assume(recur[1].prototype._parent).to.equal('parental');
+      assume(recur[0].prototype._parent).to.equal('parental');
     });
+  });
+
+  describe('.optimize', function () {
+    it('should prepare an async call stack');
+    it('should provide optimizer with Pagelet reference if no transform:before event');
   });
 });

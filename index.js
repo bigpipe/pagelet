@@ -1,19 +1,25 @@
 'use strict';
 
-var jstringify = require('json-stringify-safe')
+var Formidable = require('formidable').IncomingForm
+  , jstringify = require('json-stringify-safe')
   , fabricate = require('fabricator')
+  , helpers = require('./helpers')
   , debug = require('diagnostics')
   , dot = require('dot-component')
-  , Stream = require('stream')
-  , Temper = require('temper')
+  , Route = require('routable')
   , fuse = require('fusing')
+  , async = require('async')
   , path = require('path');
 
 //
 // Cache long prototype lookups to increase speed + write shorter code.
 //
-var slice = Array.prototype.slice
-  , temper;
+var slice = Array.prototype.slice;
+
+//
+// Methods that needs data buffering.
+//
+var operations = 'POST, PUT, DELETE, PATCH'.toLowerCase().split(', ');
 
 /**
  * Simple helper function to generate some what unique id's for given
@@ -27,31 +33,53 @@ function generator() {
 }
 
 /**
- * A pagelet is the representation of an item, section, column, widget on the
- * page. It's basically a small sand boxed application within your page.
+ * A pagelet is the representation of an item, section, column or widget.
+ * It's basically a small sandboxed application within your application.
  *
  * @constructor
  * @api public
  */
 function Pagelet(options) {
-  this.fuse();
+  if (!this) return new Pagelet(options);
 
+  this.fuse();
   options = options || {};
 
-  this.writable('_active', null);                         // Are we active.
-  this.writable('substream', null);                       // Substream from Primus.
-  this.writable('temper', options.temper || temper);      // Template parser.
+  //
+  // Use the temper instance on Pipe if available.
+  //
+  if (options.pipe && options.pipe._temper) options.temper = options.pipe._temper;
 
-  this.writable('id', options.id || [1, 1, 1, 1].map(generator).join('-'));
+  this._enabled = [];                             // Contains all enabled pagelets.
+  this._disabled = [];                            // Contains all disable pagelets.
+  this._active = null;                            // Are we active.
+  this._req = options.req;                        // Incoming HTTP request.
+  this._res = options.res;                        // Incoming HTTP response.
+  this._pipe = options.pipe;                      // Actual pipe instance.
+  this._params = options.params;                  // Params extracted from the route.
+  this._temper = options.temper;                  // Attach the Temper instance.
+  this._append = !options.parent;                 // Append content client-side.
+  this._bootstrap = options.bootstrap || {};      // Reference to bootstrap Pagelet.
+
+  this.debug = debug('pagelet:'+ this.name);      // Namespaced debug method
 
   //
-  // Add an correctly namespaced debug method so it easier to see which pagelet
-  // is called by just checking the name of it.
+  // Allow overriding the reference to parent pagelet.
+  // A reference to the parent is normally set on the
+  // constructor prototype by optimize.
   //
-  this.readable('debug', debug('pagelet:'+ this.name));
+  if (options.parent) this._parent = options.parent;
 }
 
-fuse(Pagelet, Stream, { emits: false });
+fuse(Pagelet, require('eventemitter3'));
+
+/**
+ * Unique id, useful for internal querying.
+ *
+ * @type {String}
+ * @public
+ */
+Pagelet.writable('id', null);
 
 /**
  * The name of this pagelet so it can checked to see if's enabled. In addition
@@ -63,40 +91,46 @@ fuse(Pagelet, Stream, { emits: false });
 Pagelet.writable('name', '');
 
 /**
- * When enabled we will stream the submit of each form that is within a Pagelet
- * to the server instead of using the default full page refreshes. After sending
- * the data the resulting HTML will be used to only update the contents of the
- * pagelet.
+ * The HTTP pathname that we should be matching against.
  *
- * If you want to opt-out of this with one form you can add
- * a `data-pagelet-async="false"` attribute to the form element.
- *
- * @type {Boolean}
+ * @type {String|RegExp}
  * @public
  */
-Pagelet.writable('streaming', false);
+Pagelet.writable('path', null);
 
 /**
- * These methods can be remotely called from the client. Please note that they
- * are not set to the client, it will merely be executing on the server side.
+ * The Content-Type of the response. This defaults to text/html with a charset
+ * preset. The charset does not inherit it's value from the `charset` option.
  *
- * ```js
- * Pagelet.extend({
- *   RPC: [
- *     'methodname',
- *     'another'
- *   ],
- *
- *   methodname: function methodname(reply) {
- *
- *   }
- * }).on(module);
- * ```
- *
- * @type {Array}
+ * @type {String}
  * @public
  */
-Pagelet.writable('RPC', []);
+Pagelet.writable('contentType', 'text/html; charset=UTF-8');
+
+/**
+ * Which HTTP methods should this pagelet accept. It can be a comma
+ * separated string or an array.
+ *
+ * @type {String|Array}
+ * @public
+ */
+Pagelet.writable('method', 'GET');
+
+/**
+ * The default status code that we should send back to the user.
+ *
+ * @type {Number}
+ * @public
+ */
+Pagelet.writable('statusCode', 200);
+
+/**
+ * The pagelets that need to be loaded as children of this pagelet.
+ *
+ * @type {Object}
+ * @public
+ */
+Pagelet.writable('pagelets', {});
 
 /**
  * Specify a mode that should be used for node client side rendering, this defaults
@@ -105,20 +139,60 @@ Pagelet.writable('RPC', []);
  * @type {String}
  * @public
  */
-Pagelet.writable('mode', 'html');
+Pagelet.writable('namespace', 'html');
 
 /**
- * Conditionally load this pagelet. It can also be used authorization handler.
+ * With what kind of generation mode do we need to output the generated
+ * pagelets. We're supporting 3 different modes:
+ *
+ * - sync:      Fully render without any fancy flushing of pagelets.
+ * - async:     Render all pagelets async and flush them as fast as possible.
+ * - pipeline:  Same as async but in the specified order.
+ *
+ * @type {String}
+ * @public
+ */
+Pagelet.writable('mode', 'async');
+
+/**
+ * Optional template engine preference. Useful when we detect the wrong template
+ * engine based on the view's file name.
+ *
+ * @type {String}
+ * @public
+ */
+Pagelet.writable('engine', '');
+
+/**
+ * Save the location where we got our resources from, this will help us with
+ * fetching assets from the correct location.
+ *
+ * @type {String}
+ * @public
+ */
+Pagelet.writable('directory', '');
+
+/**
+ * The environment that we're running this pagelet in. If this is set to
+ * `development` It would be verbose.
+ *
+ * @type {String}
+ * @public
+ */
+Pagelet.writable('env', (process.env.NODE_ENV || 'development').toLowerCase());
+
+/**
+ * Conditionally load this pagelet. It can also be used as authorization handler.
  * If the incoming request is not authorized you can prevent this pagelet from
  * showing. The assigned function receives 3 arguments.
  *
  * - req, the http request that initialized the pagelet
- * - list, array of pagelets that will be tried if this pagelet
+ * - list, array of pagelets that will be tried
  * - done, a callback function that needs to be called with only a boolean.
  *
  * ```js
  * Pagelet.extend({
- *   if: function conditional(req, left, done) {
+ *   if: function conditional(req, list, done) {
  *     done(true); // True indicates that the request is authorized for access.
  *   }
  * });
@@ -219,7 +293,7 @@ Pagelet.writable('engine', '');
 Pagelet.writable('css', '');
 
 /**
- * The JavaScript files needed for this page. The location can be a string or
+ * The JavaScript files needed for this pagelet. The location can be a string or
  * multiple paths in an array. This file needs to be included in order for
  * this pagelet to function.
  *
@@ -256,6 +330,30 @@ Pagelet.writable('dependencies', []);
 Pagelet.writable('directory', '');
 
 /**
+ * Reference to parent Pagelet name.
+ *
+ * @type {Object}
+ * @private
+ */
+Pagelet.writable('_parent', null);
+
+/**
+ * Set of optimized children Pagelet.
+ *
+ * @type {Object}
+ * @private
+ */
+Pagelet.writable('_children', {});
+
+/**
+ * Cataloged dependencies by extension.
+ *
+ * @type {Object}
+ * @private
+ */
+Pagelet.writable('_dependencies', {});
+
+/**
  * Default asynchronous get function. Override to provide specific data to the
  * render function.
  *
@@ -264,6 +362,183 @@ Pagelet.writable('directory', '');
  */
 Pagelet.writable('get', function get(done) {
   (global.setImmediate || global.setTimeout)(done);
+});
+
+/**
+ * Get parameters that were extracted from the route.
+ *
+ * @type {Object}
+ * @public
+ */
+Pagelet.readable('params', {
+  enumerable: false,
+  get: function params() {
+    return this._params || this._bootstrap._params || Object.create(null);
+  }
+}, true);
+
+/**
+ * Report the length of the queue (e.g. amount of children). The length
+ * is increased with one as the reporting pagelet is part of the queue.
+ *
+ * @return {Number} Length of queue
+ * @api private
+ */
+Pagelet.set('length', function length() {
+  return this._children.length + 1;
+});
+
+/**
+ * Get and initialize a given child Pagelet.
+ *
+ * @param {String} name Name of the child pagelet.
+ * @returns {Array} The pagelet instances.
+ * @api public
+ */
+Pagelet.readable('child', function child(name) {
+  if (Array.isArray(name)) name = name[0];
+  return (this.has(name) || this.has(name, true) || []).slice(0);
+});
+
+/**
+ * Helper to check if the pagelet has a child pagelet by name, must use
+ * prototype.name since pagelets are not always constructed yet.
+ *
+ * @param {String} name Name of the pagelet.
+ * @param {String} enabled Make sure that we use the enabled array.
+ * @returns {Array} The constructors of matching Pagelets.
+ * @api public
+ */
+Pagelet.readable('has', function has(name, enabled) {
+  if (!name) return [];
+
+  if (enabled) return this._enabled.filter(function filter(pagelet) {
+    return pagelet.name === name;
+  });
+
+  var pagelets = this._children
+    , i = pagelets.length
+    , pagelet;
+
+  while (i--) {
+    pagelet = pagelets[i][0];
+
+    if (
+       pagelet.prototype && pagelet.prototype.name === name
+    || pagelets.name === name
+    ) return pagelets[i];
+  }
+
+  return [];
+});
+
+/**
+ * Render execution flow.
+ *
+ * @api private
+ */
+Pagelet.readable('init', function init() {
+  var method = this._req.method.toLowerCase()
+    , pagelet = this;
+
+  //
+  // Only start reading the incoming POST request when we accept the incoming
+  // method for read operations. Render in a regular mode if we do not accept
+  // these requests.
+  //
+  if (~operations.indexOf(method)) {
+    var pagelets = this.child(this._req.query._pagelet)
+      , reader = this._pipe.read(pagelet);
+
+    this.debug('Processing %s request', method);
+
+    async.whilst(function work() {
+      return !!pagelets.length;
+    }, function process(next) {
+      var Child = pagelets.shift()
+        , child;
+
+      if (!(method in Pagelet.prototype)) return next();
+
+      child = new Child({ pipe: pagelet._pipe });
+      child.conditional(pagelet._req, pagelets, function allowed(accepted) {
+        if (!accepted) {
+          if (child.destroy) child.destroy();
+          return next();
+        }
+
+        reader.before(child[method], child);
+      });
+    }, function nothing() {
+      if (method in pagelet) {
+        reader.before(pagelet[method], pagelet);
+      } else {
+        pagelet[pagelet.mode]();
+      }
+    });
+  } else {
+    this[this.mode]();
+  }
+});
+
+/**
+ * Start buffering and reading the incoming request.
+ *
+ * @returns {Form}
+ * @api private
+ */
+Pagelet.readable('read', function read() {
+  var form = new Formidable
+    , pagelet = this
+    , fields = {}
+    , files = {}
+    , context
+    , before;
+
+  form.on('progress', function progress(received, expected) {
+    //
+    // @TODO if we're not sure yet if we should handle this form, we should only
+    // buffer it to a predefined amount of bytes. Once that limit is reached we
+    // need to `form.pause()` so the client stops uploading data. Once we're
+    // given the heads up, we can safely resume the form and it's uploading.
+    //
+  }).on('field', function field(key, value) {
+    fields[key] = value;
+  }).on('file', function file(key, value) {
+    files[key] = value;
+  }).on('error', function error(err) {
+    pagelet[pagelet.mode](err);
+    fields = files = {};
+  }).on('end', function end() {
+    form.removeAllListeners();
+
+    if (before) {
+      before.call(context, fields, files, pagelet[pagelet.mode].bind(pagelet));
+    }
+  });
+
+  /**
+   * Add a hook for adding a completion callback.
+   *
+   * @param {Function} callback
+   * @returns {Form}
+   * @api public
+   */
+  form.before = function befores(callback, contexts) {
+    if (form.listeners('end').length)  {
+      form.resume();      // Resume a possible buffered post.
+
+      before = callback;
+      context = contexts;
+
+      return form;
+    }
+
+    callback.call(contexts || context, fields, files, pagelet[pagelet.mode].bind(pagelet));
+    return form;
+  };
+
+  return form.parse(this._req);
 });
 
 /**
@@ -297,6 +572,230 @@ Pagelet.readable('stringify', function stringify(data, replacer) {
 //
 // !IMPORTANT
 //
+
+/**
+ * Discover pagelets that we're allowed to use.
+ *
+ * @returns {Pagelet} fluent interface
+ * @api private
+ */
+Pagelet.readable('discover', function discover() {
+  if (!this.length) return this.emit('discover');
+
+  var req = this._req
+    , res = this._res
+    , pagelet = this;
+
+  //
+  // We need to do an async map/filter of the pagelets, in order to this as
+  // efficient as possible we're going to use a reduce.
+  //
+  async.reduce(this._children, {
+    disabled: [],
+    enabled: []
+  }, function reduce(memo, children, next) {
+    children = children.slice(0);
+
+    var child, last;
+
+    async.whilst(function work() {
+      return children.length && !child;
+    }, function work(next) {
+      var Child = children.shift()
+        , test = new Child({
+            bootstrap: pagelet._bootstrap,
+            pipe: pagelet._pipe,
+            res: res,
+            req: req
+          });
+
+      test.conditional(req, children, function conditionally(accepted) {
+        if (last && last.destroy) last.destroy();
+
+        if (accepted) child = test;
+        else last = test;
+
+        next(!!child);
+      });
+    }, function found() {
+      if (child) memo.enabled.push(child);
+      else memo.disabled.push(last);
+
+      next(undefined, memo);
+    });
+  }, function discovered(err, children) {
+    pagelet._disabled = children.disabled;
+    pagelet._enabled = children.enabled.concat(pagelet);
+
+    pagelet._enabled.forEach(function initialize(child) {
+      if ('function' === typeof child.initialize) child.initialize();
+    });
+
+    pagelet.debug('Initialized all allowed pagelets');
+    pagelet.emit('discover');
+  });
+
+  return this;
+});
+
+/**
+ * Mode: sync
+ * Output the pagelets fully rendered in the HTML template.
+ *
+ * @TODO remove pagelet's that have `authorized` set to `false`
+ * @TODO Also write the CSS and JavaScript.
+ *
+ * @param {Error} err Failed to process POST.
+ * @param {Object} data Optional data from POST.
+ * @returns {Pagelet} fluent interface.
+ * @api private
+ */
+Pagelet.readable('sync', function render(err, data) {
+  if (err) return this.end(err);
+
+  var pagelet = this;
+
+  pagelet.debug('Processing the pagelets in `sync` mode');
+  pagelet.once('end', pagelet.end, pagelet);
+
+  //
+  // Because we're synchronously rendering the pagelets we need to discover
+  // which one's are enabled before we send the bootstrap code so it can include
+  // the CSS files of the enabled pagelets in the HEAD of the page so there is
+  // styling available.
+  //
+  pagelet.once('discover', function discovered() {
+    async.each(pagelet._enabled.concat(pagelet._disabled), function each(pagelet, next) {
+      pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
+
+      pagelet.render({ mode: 'sync', data: data }, function rendered(err, content) {
+        if (err) return next(err);
+
+        pagelet.write(pagelet.name, content);
+        next();
+      });
+    }, function done(err) {
+      if (err) return pagelet.end(err);
+      pagelet._bootstrap.reduce().flush(pagelet.emits('end'));
+    });
+  }).discover();
+});
+
+/**
+ * Mode: Async
+ * Output the pagelets as fast as possible.
+ *
+ * @param {Error} err Failed to process POST.
+ * @param {Object} data Optional data from POST.
+ * @returns {Pagelet} fluent interface.
+ * @api private
+ */
+Pagelet.readable('async', function render(err, data) {
+  if (err) return this.end(err);
+
+  var pagelet = this;
+
+  pagelet.debug('Processing the pagelets in `async` mode');
+  pagelet.once('end', pagelet.end, pagelet);
+
+  //
+  // Flush the initial headers asap so the browser can start detect encoding
+  // start downloading assets and prepare for rendering additional pagelets.
+  //
+  pagelet._bootstrap.flush(function flushed(error) {
+    if (error) return pagelet.emit('end', error);
+
+    pagelet.once('discover', function discovered() {
+      async.each(pagelet._enabled.concat(pagelet._disabled), function (pagelet, next) {
+        pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
+
+        pagelet.render({
+          data: pagelet._pipe._compiler.pagelet(pagelet)
+        }, function rendered(err, content) {
+          if (err) return next(err);
+
+          pagelet.write(pagelet.name, content).flush(next);
+        });
+      }, pagelet.emits('end'));
+    }).discover();
+  });
+});
+
+/**
+ * Mode: pipeline
+ * Output the pagelets as fast as possible but in order.
+ *
+ * @param {Error} err Failed to process POST.
+ * @param {Object} data Optional data from POST.
+ * @returns {Pagelet} fluent interface.
+ * @api private
+ */
+Pagelet.readable('pipeline', function render(err, data) {
+  throw new Error('Not Implemented');
+});
+
+/**
+ * Process the pagelet for an async or pipeline based render flow.
+ *
+ * @param {String} name Pagelet name
+ * @param {Mixed} fragment Content returned from Pagelet.render().
+ * @returns {Bootstrap} Reference to bootstrap pagelet.
+ * @api private
+ */
+Pagelet.readable('write', function write(name, fragment) {
+  this.debug('Queueing HTML fragment');
+  return this._bootstrap.queue(name, fragment);
+});
+
+/**
+ * Close the connection once all pagelets are sent.
+ *
+ * @param {Error} err Optional error argument to trigger the error pagelet.
+ * @returns {Boolean} Closed the connection.
+ * @api private
+ */
+Pagelet.readable('end', function end(err) {
+  //
+  // The connection was already closed, no need to further process it.
+  //
+  if (this._res.finished) {
+    this.debug('Pagelet has finished, ignoring extra .end call');
+    return true;
+  }
+
+  //
+  // We've received an error. We need to close down parent pagelet and
+  // display a 500 error pagelet instead.
+  //
+  // @TODO handle the case when we've already flushed the initial bootstrap code
+  // to the client and we're presented with an error.
+  //
+  if (err) {
+    this.emit('close', err);
+    this.debug('Captured an error: %s, displaying error pagelet instead', err);
+    this._pipe.status(this._req, this._res, 500, err);
+    return true;
+  }
+
+  //
+  // Do not close the connection before all pagelets are send.
+  //
+  if (this._bootstrap.length) {
+    this.debug('Not all pagelets have been written, (%s out of %s)',
+      this._bootstrap.length, this.length
+    );
+    return false;
+  }
+
+  //
+  // Everything is processed, close the connection and clean up references.
+  //
+  this._bootstrap.flush(this.emits('close'));
+  this._res.end();
+
+  this.debug('Closed the connection');
+  return true;
+});
 
 /**
  * Checks if we're an active Pagelet or if we still need to a do an check
@@ -335,8 +834,9 @@ Pagelet.readable('render', function render(options, fn) {
   options = options || {};
 
   var context = options.context || this
+    , mode = options.mode || 'async'
     , data = options.data || {}
-    , temper = this.temper
+    , temper = this._temper
     , query = this.query
     , pagelet = this;
 
@@ -351,18 +851,14 @@ Pagelet.readable('render', function render(options, fn) {
     var active = pagelet.active;
 
     if (!active) content = '';
-
-    if (options.substream || pagelet.page && pagelet.page.mode === 'sync') {
-      data.view = content;
-      return fn.call(context, undefined, data);
-    }
+    if (mode === 'sync') return fn.call(context, undefined, content);
 
     data.id = data.id || pagelet.id;                      // Pagelet id.
     data.mode = data.mode || pagelet.mode;                // Pagelet render mode.
-    data.rpc = data.rpc || pagelet.RPC;                   // RPC methods.
     data.remove = active ? false : pagelet.remove;        // Remove from DOM.
-    data.streaming = !!pagelet.streaming;                 // Submit streaming.
     data.parent = pagelet._parent;                        // Send parent name along.
+    data.append = pagelet._append;                        // Content should be appended.
+    data.remaining = pagelet._bootstrap.length;           // Remaining pagelets number.
     data.hash = {
       error: temper.fetch(pagelet.error).hash.client,     // MD5 hash of error view.
       client: temper.fetch(pagelet.view).hash.client      // MD5 hash of client view.
@@ -388,7 +884,7 @@ Pagelet.readable('render', function render(options, fn) {
     return pagelet;
   }
 
-  return this.conditional(this.page.req, options.pagelets, function auth(enabled) {
+  return this.conditional(this._req, options.pagelets, function auth(enabled) {
     if (!enabled) return fragment('');
 
     //
@@ -409,7 +905,7 @@ Pagelet.readable('render', function render(options, fn) {
       //
       try {
         if (err) {
-          pagelet.debug('render %s/%s resulted in a error', pagelet.name, pagelet.id, err);
+          pagelet.debug('Render %s/%s resulted in a error', pagelet.name, pagelet.id, err);
           throw err; // Throw so we can capture it again.
         }
 
@@ -436,7 +932,7 @@ Pagelet.readable('render', function render(options, fn) {
       //
       // Add queried parts of data, so the client-side script can use it.
       //
-      if ('object' === typeof result && Array.isArray(query)) {
+      if ('object' === typeof result && Array.isArray(query) && query.length) {
         data.data = query.reduce(function find(memo, q) {
           memo[q] = dot.get(result, q);
           return memo;
@@ -449,123 +945,6 @@ Pagelet.readable('render', function render(options, fn) {
 });
 
 /**
- * Connect with a Primus substream.
- *
- * @param {Spark} spark The Primus connection.
- * @param {Function} next The completion callback
- * @returns {Pagelet}
- * @api private
- */
-Pagelet.readable('connect', function connect(spark, next) {
-  var pagelet = this;
-
-  /**
-   * Create a new Substream.
-   *
-   * @param {Boolean} enabled Allowed to use this pagelet.
-   * @returns {Pagelet}
-   * @api private
-   */
-  return this.conditional(spark.request, [], function substream(enabled) {
-    if (!enabled) return next(new Error('Unauthorized to access this pagelet'));
-
-    var stream = pagelet.substream = spark.substream(pagelet.name)
-      , log = debug('pagelet:primus:'+ pagelet.name);
-
-    log('created a new substream');
-
-    stream.once('end', pagelet.emits('end', function (arg) {
-      log('closing substream');
-
-      return arg;
-    }));
-
-    stream.on('data', function streamed(data) {
-      log('incoming packet %s', data.type);
-
-      switch (data.type) {
-        case 'rpc':
-          pagelet.call(data);
-        break;
-
-        case 'emit':
-          Stream.prototype.emit.apply(pagelet, [data.name].concat(data.args));
-        break;
-
-        case 'get':
-          pagelet.render({ substream: true }, function renderd(err, fragment) {
-            stream.write({ type: 'fragment', frag: fragment, err: err });
-          });
-        break;
-
-        case 'post':
-        case 'put':
-          if (!(data.type in pagelet)) {
-            return stream.write({ type: data.type, err: new Error('Method not supported by pagelet') });
-          }
-
-          pagelet[data.type](data.body || {}, data.files || [], function processed(err, context) {
-            if (err) return stream.write({ type: 'err', err: err });
-
-            pagelet.render({ data: context, substream: true }, function rendered(err, fragment) {
-              if (err) return stream.write({ type: 'err', err: err });
-
-              stream.write({ type: 'fragment', frag: fragment, err: err });
-            });
-          });
-        break;
-
-        default:
-          log('unknown packet type %s, ignoring packet', data.type);
-        break;
-      }
-    });
-
-    next(undefined, pagelet);
-    return pagelet;
-  });
-});
-
-/**
- * Simple emit wrapper that returns a function that emits an event once it's
- * called
- *
- * ```js
- * example.on('close', example.emits('close'));
- * ```
- *
- * @param {String} event Name of the event that we should emit.
- * @param {Function} parser The last argument, if it's a function is a arg parser
- * @api public
- */
-Pagelet.prototype.emits = function emits() {
-  var args = slice.call(arguments, 0)
-    , self = this
-    , parser;
-
-  //
-  // Assume that if the last given argument is a function, it would be
-  // a parser.
-  //
-  if ('function' === typeof args[args.length - 1]) {
-    parser = args.pop();
-  }
-
-  return function emit(arg) {
-    if (!self.listeners(args[0]).length) return false;
-
-    if (parser) {
-      arg = parser.apply(self, arguments);
-      if (!Array.isArray(arg)) arg = [arg];
-    } else {
-      arg = slice.call(arguments, 0);
-    }
-
-    return Stream.prototype.emit.apply(self, args.concat(arg));
-  };
-};
-
-/**
  * Authenticate the Pagelet.
  *
  * @param {Request} req The HTTP request.
@@ -576,6 +955,11 @@ Pagelet.prototype.emits = function emits() {
  */
 Pagelet.readable('conditional', function conditional(req, list, fn) {
   var pagelet = this;
+
+  if ('function' !== typeof fn) {
+    fn = list;
+    list = [];
+  }
 
   /**
    * Callback for the `pagelet.if` function to see if we're enabled or disabled.
@@ -600,79 +984,17 @@ Pagelet.readable('conditional', function conditional(req, list, fn) {
 });
 
 /**
- * Call an RPC method.
- *
- * @param {Object} data The RPC call information.
- * @api private
- */
-Pagelet.readable('call', function calls(data) {
-  var index = this.RPC.indexOf(data.method)
-    , fn = this[data.method]
-    , pagelet = this
-    , err;
-
-  if (!~index || 'function' !== typeof fn) return this.substream.write({
-    args: [new Error('RPC method is not known')],
-    type: 'rpc',
-    id: data.id
-  });
-
-  //
-  // Our RPC pattern is a callback first pattern, where the callback is the
-  // first argument that a function receives. This makes it a lot easier to add
-  // a variable length of arguments to a function call.
-  //
-  fn.apply(pagelet, [function reply() {
-    pagelet.substream.write({
-      args: slice.call(arguments, 0),
-      type: 'rpc',
-      id: data.id
-    });
-  }].concat(data.args));
-});
-
-/**
  * Destroy the pagelet and remove all the back references so it can be safely
  * garbage collected.
  *
  * @api public
  */
 Pagelet.readable('destroy', function destroy() {
-  if (this.substream) this.substream.end();
-
-  this.temper = null;
+  this._temper = this._pipe = null;
   this.removeAllListeners();
 
   return this;
 });
-
-/**
- * Helper function to resolve assets on the pagelet.
- *
- * @param {String|Array} keys Name(s) of the property, e.g. [css, js].
- * @param {String} dir Optional absolute directory to resolve from.
- * @returns {Pagelet}
- * @api public
- */
-Pagelet.resolve = function resolve(keys, dir) {
-  var prototype = this.prototype;
-
-  keys = Array.isArray(keys) ? keys : [keys];
-  keys.forEach(function each(key) {
-    if (!prototype[key]) return;
-
-    var stack = Array.isArray(prototype[key])
-      ? prototype[key]
-      : [prototype[key]];
-
-    prototype[key] = stack.filter(Boolean).map(function map(file) {
-      if (/^(http:|https:)?\/\//.test(file)) return file;
-      return path.resolve(dir || prototype.directory, file);
-    });
-  });
-
-  return this;
-};
 
 /**
  * Expose the Pagelet on the exports and parse our the directory. This ensures
@@ -700,11 +1022,6 @@ Pagelet.on = function on(module) {
     : path.resolve(__dirname, 'error.html');
 
   //
-  // Map all dependencies to an absolute path or URL.
-  //
-  Pagelet.resolve.call(this, ['css', 'js', 'dependencies']);
-
-  //
   // Resolve the view to make sure an absolute path is provided to Temper.
   //
   if (prototype.view) prototype.view = path.resolve(dir, prototype.view);
@@ -713,133 +1030,209 @@ Pagelet.on = function on(module) {
 };
 
 /**
- * Optimize the prototypes of the Pagelet to reduce work when we're actually
- * serving the requests.
- *
- * Options:
- *
- * - temper: A custom temper instance we want to use to compile the templates.
- * - transform: Transformation callback so plugins can hook in the optimizer.
- *
- * @param {Object} options Optimization configuration.
- * @param {Function} next Completion callback for async execution.
- * @returns {Pagelet}
- * @api private
- */
-Pagelet.optimize = function optimize(options, next) {
-  var prototype = this.prototype
-    , name = prototype.name
-    , async = false
-    , err;
-
-  if ('function' === typeof options) {
-    next = options;
-    options = null;
-  }
-
-  options = options || {};
-  options.temper = options.temper || temper || (temper = new Temper()) ;
-
-  //
-  // Prefetch the template if a view is available. Resolve the view
-  // to make sure an absolute path is provided to Temper.
-  //
-  if (prototype.view) {
-    prototype.view = path.resolve(prototype.directory, prototype.view);
-    options.temper.prefetch(prototype.view, prototype.engine);
-  }
-
-  //
-  // Ensure we have a custom error page when we fail to render this fragment.
-  //
-  if (prototype.error) {
-    options.temper.prefetch(prototype.error, path.extname(prototype.error).slice(1));
-  }
-
-  //
-  // Map all dependencies to an absolute path or URL.
-  //
-  Pagelet.resolve.call(this, ['css', 'js', 'dependencies']);
-
-  //
-  // Support lowercase variant of RPC
-  //
-  if ('rpc' in prototype) {
-    prototype.RPC = prototype.rpc;
-    delete prototype.rpc;
-  }
-
-  if ('string' === typeof prototype.RPC) {
-    prototype.RPC = prototype.RPC.split(/[\s|\,]+/);
-  }
-
-  //
-  // Validate the existance of the RPC methods, this reduces possible typo's
-  //
-  prototype.RPC.forEach(function validate(method) {
-    if (!(method in prototype)) return err = new Error(
-      name +' is missing RPC function `'+ method +'` on prototype'
-    );
-
-    if ('function' !== typeof prototype[method]) return err = new Error(
-      name +'#'+ method +' is not function which is required for RPC usage'
-    );
-  });
-
-  //
-  // Allow plugins to hook in the transformation process, so emit it when
-  // all our transformations are done and before we create a copy of the
-  // "fixed" properties which later can be re-used again to restore
-  // a generated instance to it's original state.
-  //
-  if ('function' === typeof options.transform && !err) {
-    if (options.transform.length === 2) async = true;
-    options.transform(this, next);
-  }
-
-  if (!async) process.nextTick(next.bind(next, err));
-
-  return this;
-};
-
-/**
  * Discover all pagelets recursive. Fabricate will create constructable instances
  * from the provided value of prototype.pagelets.
  *
- * @param {Pagelet} parent Reference to the parent pagelet.
+ * @param {String} parent Reference to the parent pagelet name.
  * @return {Array} collection of pagelets instances.
  * @api public
  */
-Pagelet.traverse = function traverse(parent) {
+Pagelet.children = function children(parent, stack) {
   var pagelets = this.prototype.pagelets
-    , log = debug('bigpipe:pagelet')
-    , found = [this];
+    , log = debug('pagelet:'+ parent);
 
-  if (!pagelets) return found;
+  stack = stack || [];
+  if (!pagelets || !Object.keys(pagelets).length) return stack;
 
-  pagelets = fabricate(pagelets, { recursive: false });
-  pagelets.forEach(function each(Pagelet) {
-    log('Recursive discovery of child pagelets from %s', parent);
+  return fabricate(pagelets, {
+    source: this.prototype.directory,
+    recursive: 'string' === typeof pagelets
+  }).reduce(function each(stack, Pagelet) {
+    var name = Pagelet.prototype.name;
+    log('Recursive discovery of child pagelet %s', name);
 
     //
     // We need to extend the pagelet if it already has a _parent name reference
-    // or will accidentally override it. This you have Pagelet with child
-    // pagelet. And you extend the parent pagelet so it receives a new name. But
-    // the extended parent and regular parent still point to the same child
-    // pagelet. So when we try to traverse these pagelets we will override
-    // _parent property unless we create a new fresh instance and set it on that
-    // instead.
+    // or will accidentally override it. This can happen when you extend a parent
+    // pagelet with children and alter the parent's name. The extended parent and
+    // regular parent still point to the same child pagelets. So when we try to
+    // set the proper parent, these pagelets will override the _parent property
+    // unless we create a new fresh instance and set it on that instead.
     //
-    if (Pagelet.prototype._parent && Pagelet.prototype.name !== parent) {
+    if (Pagelet.prototype._parent && name !== parent) {
       Pagelet = Pagelet.extend();
     }
 
     Pagelet.prototype._parent = parent;
+    return Pagelet.children(name, stack.concat(Pagelet));
+  }, stack);
+};
 
-    Array.prototype.push.apply(found, Pagelet.traverse(Pagelet.prototype.name));
-  });
+/**
+ * Optimize the prototypes of Pagelets to reduce work when we're actually
+ * serving the requests via BigPipe.
+ *
+ * Options:
+ * - temper: A custom temper instance we want to use to compile the templates.
+ *
+ * @param {Object} options Optimization configuration.
+ * @param {Function} next Completion callback for async execution.
+ * @api public
+ */
+Pagelet.optimize = function optimize(options, done) {
+  if ('function' === typeof options) {
+    done = options;
+    options = {};
+  }
 
-  return found;
+  var stack = []
+    , Pagelet = this
+    , pipe = options.pipe || {}
+    , transform = options.transform || {}
+    , temper = options.temper || pipe._temper
+    , before, after;
+
+  //
+  // Check if before listener is found. Add before emit to the stack.
+  // This async function will be called before optimize.
+  //
+  if (pipe._events && 'transform:pagelet:before' in pipe._events) {
+    before = pipe._events['transform:pagelet:before'].length || 1;
+
+    stack.push(function run(next) {
+      var n = 0;
+
+      transform.before(Pagelet, function ran(error, Pagelet) {
+        if (error || ++n === before) return next(error, Pagelet);
+      });
+    });
+  }
+
+  //
+  // If transform.before was not pushed on the stack, optimizer needs
+  // to called with a reference to Pagelet.
+  //
+  stack.push(!stack.length ? async.apply(optimizer, Pagelet) : optimizer);
+
+  //
+  // Check if after listener is found. Add after emit to the stack.
+  // This async function will be called after optimize.
+  //
+  if (pipe._events && 'transform:pagelet:after' in pipe._events) {
+    after = pipe._events['transform:pagelet:after'].length || 1;
+
+    stack.push(function run(Pagelet, next) {
+      var n = 0;
+
+      transform.after(Pagelet, function ran(error, Pagelet) {
+        if (error || ++n === after) return next(error, Pagelet);
+      });
+    });
+  }
+
+  //
+  // Run the stack in series. This ensures that before hooks are run
+  // prior to optimizing and after hooks are ran post optimizing.
+  //
+  async.waterfall(stack, done);
+
+  /**
+   * Optimize the pagelet. This function is called by default as part of
+   * the async stack.
+   *
+   * @param {Function} next Completion callback
+   * @api private
+   */
+  function optimizer(Pagelet, next) {
+    var prototype = Pagelet.prototype
+      , method = prototype.method
+      , router = prototype.path
+      , name = prototype.name
+      , log = debug('pagelet:'+ name);
+
+    //
+    // Generate a unique ID used for real time connection lookups.
+    //
+    prototype.id = options.id || [1, 1, 1, 1].map(generator).join('-');
+
+    //
+    // Parse the methods to an array of accepted HTTP methods. We'll only accept
+    // these requests and should deny every other possible method.
+    //
+    log('Optimizing pagelet');
+    if (!Array.isArray(method)) method = method.split(/[\s\,]+?/);
+    Pagelet.method = method.filter(Boolean).map(function transformation(method) {
+      return method.toUpperCase();
+    });
+
+    //
+    // Add the actual HTTP route and available HTTP methods.
+    //
+    if (router) {
+      log('Instantiating router for path %s', router);
+      Pagelet.router = new Route(router);
+    }
+
+    //
+    // Prefetch the template if a view is available. The view property is
+    // mandatory but it's quite silly to enforce this if the pagelet is
+    // just doing a redirect. We can check for this edge case by
+    // checking if the set statusCode is in the 300~ range.
+    //
+    if (prototype.view) {
+      prototype.view = path.resolve(prototype.directory, prototype.view);
+      temper.prefetch(prototype.view, prototype.engine);
+    } else if (!(prototype.statusCode >= 300 && prototype.statusCode < 400)) {
+      return next(new Error(
+        'The '+ name +' pagelet for path '+ router +' should have a .view property.'
+      ));
+    }
+
+    //
+    // Ensure we have a custom error pagelet when we fail to render this fragment.
+    //
+    if (prototype.error) {
+      temper.prefetch(prototype.error, path.extname(prototype.error).slice(1));
+    }
+
+    //
+    // Map all dependencies to an absolute path or URL.
+    //
+    helpers.resolve(Pagelet, ['css', 'js', 'dependencies']);
+
+    //
+    // Find all child pagelets and optimize the found children.
+    //
+    async.map(Pagelet.children(name), function map(Child, step) {
+      if (Array.isArray(Child)) return async.map(Child, map, step);
+
+      Child.optimize({
+        temper: temper,
+        pipe: pipe,
+        transform: {
+          before: pipe.emits && pipe.emits('transform:pagelet:before'),
+          after: pipe.emits && pipe.emits('transform:pagelet:after')
+        }
+      }, step);
+    }, function optimized(error, children) {
+      if (error) return next(error);
+
+      //
+      // Store the optimized children on the prototype, wrapping the Pagelet
+      // in an array makes it a lot easier to work with conditional Pagelets.
+      //
+      prototype._children = children.map(function map(Pagelet) {
+        return Array.isArray(Pagelet) ? Pagelet : [Pagelet];
+      });
+
+      //
+      // Always return a reference to the parent Pagelet.
+      // Otherwise the stack of parents would be infested
+      // with children returned by this async.map.
+      //
+      next(null, Pagelet);
+    });
+  }
 };
 
 //
