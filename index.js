@@ -57,7 +57,7 @@ function Pagelet(options) {
   this._pipe = options.pipe;                      // Actual pipe instance.
   this._params = options.params;                  // Params extracted from the route.
   this._temper = options.temper;                  // Attach the Temper instance.
-  this._append = options.append || false;         // Append content client-side.
+  this._append = !options.parent;                 // Append content client-side.
   this._bootstrap = options.bootstrap || {};      // Reference to bootstrap Pagelet.
 
   this.debug = debug('pagelet:'+ this.name);      // Namespaced debug method
@@ -896,7 +896,7 @@ Pagelet.readable('conditional', function conditional(req, list, fn) {
   var pagelet = this;
 
   if ('function' !== typeof fn) {
-    fn = list
+    fn = list;
     list = [];
   }
 
