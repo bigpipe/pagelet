@@ -34,7 +34,7 @@
     "temper": "0.2.x"
   },
   "devDependencies": {
-    "assume": "0.0.x",
+    "assume": "1.1.x",
     "bigpipe": "^0.8.5",
     "coveralls": "2.10.x",
     "illuminati": "0.0.x",
