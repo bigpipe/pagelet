@@ -1,6 +1,7 @@
 'use strict';
 
-var jstringify = require('json-stringify-safe')
+var Formidable = require('formidable').IncomingForm
+  , jstringify = require('json-stringify-safe')
   , fabricate = require('fabricator')
   , helpers = require('./helpers')
   , debug = require('diagnostics')
@@ -478,6 +479,66 @@ Pagelet.readable('init', function init() {
   } else {
     this[this.mode]();
   }
+});
+
+/**
+ * Start buffering and reading the incoming request.
+ *
+ * @returns {Form}
+ * @api private
+ */
+Pagelet.readable('read', function read() {
+  var form = new Formidable
+    , pagelet = this
+    , fields = {}
+    , files = {}
+    , context
+    , before;
+
+  form.on('progress', function progress(received, expected) {
+    //
+    // @TODO if we're not sure yet if we should handle this form, we should only
+    // buffer it to a predefined amount of bytes. Once that limit is reached we
+    // need to `form.pause()` so the client stops uploading data. Once we're
+    // given the heads up, we can safely resume the form and it's uploading.
+    //
+  }).on('field', function field(key, value) {
+    fields[key] = value;
+  }).on('file', function file(key, value) {
+    files[key] = value;
+  }).on('error', function error(err) {
+    pagelet[pagelet.mode](err);
+    fields = files = {};
+  }).on('end', function end() {
+    form.removeAllListeners();
+
+    if (before) {
+      before.call(context, fields, files, pagelet[pagelet.mode].bind(pagelet));
+    }
+  });
+
+  /**
+   * Add a hook for adding a completion callback.
+   *
+   * @param {Function} callback
+   * @returns {Form}
+   * @api public
+   */
+  form.before = function befores(callback, contexts) {
+    if (form.listeners('end').length)  {
+      form.resume();      // Resume a possible buffered post.
+
+      before = callback;
+      context = contexts;
+
+      return form;
+    }
+
+    callback.call(contexts || context, fields, files, pagelet[pagelet.mode].bind(pagelet));
+    return form;
+  };
+
+  return form.parse(this._req);
 });
 
 /**
