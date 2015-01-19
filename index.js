@@ -448,7 +448,7 @@ Pagelet.readable('init', function init() {
   //
   if (~operations.indexOf(method)) {
     var pagelets = this.child(this._req.query._pagelet)
-      , reader = this._pipe.read(pagelet);
+      , reader = this.read(pagelet);
 
     this.debug('Processing %s request', method);
 
