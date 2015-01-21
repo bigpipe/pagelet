@@ -917,6 +917,7 @@ Pagelet.readable('render', function render(options, fn) {
     if (mode === 'sync') return fn.call(context, undefined, content);
 
     data.id = data.id || pagelet.id;                      // Pagelet id.
+    data.path = data.path || pagelet.path;                // Reference to the path.
     data.mode = data.mode || pagelet.mode;                // Pagelet render mode.
     data.remove = active ? false : pagelet.remove;        // Remove from DOM.
     data.parent = pagelet._parent;                        // Send parent name along.
