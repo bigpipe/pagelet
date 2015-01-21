@@ -99,15 +99,6 @@ Pagelet.writable('name', '');
 Pagelet.writable('path', null);
 
 /**
- * The Content-Type of the response. This defaults to text/html with a charset
- * preset. The charset does not inherit it's value from the `charset` option.
- *
- * @type {String}
- * @public
- */
-Pagelet.writable('contentType', 'text/html; charset=UTF-8');
-
-/**
  * Which HTTP methods should this pagelet accept. It can be a comma
  * separated string or an array.
  *
@@ -352,6 +343,14 @@ Pagelet.writable('_children', {});
  * @private
  */
 Pagelet.writable('_dependencies', {});
+
+/**
+ * Default content type of the Pagelet.
+ *
+ * @type {Object}
+ * @private
+ */
+Pagelet.writable('_contentType', 'text/html');
 
 /**
  * Default asynchronous get function. Override to provide specific data to the
@@ -675,7 +674,7 @@ Pagelet.readable('sync', function render(err, data) {
       });
     }, function done(error) {
       if (error) return pagelet.capture(error);
-      pagelet._bootstrap.reduce().end();
+      pagelet._bootstrap.render().reduce().end();
     });
   }).discover();
 });
@@ -700,7 +699,7 @@ Pagelet.readable('async', function render(err, data) {
   // Flush the initial headers asap so the browser can start detect encoding
   // start downloading assets and prepare for rendering additional pagelets.
   //
-  pagelet._bootstrap.flush(function flushed(error) {
+  pagelet._bootstrap.render().flush(function flushed(error) {
     if (error) return pagelet.capture(error);
 
     pagelet.once('discover', function discovered() {
@@ -812,7 +811,20 @@ Pagelet.readable('capture', function capture(error) {
   this._pipe.status(this._req, this._res, 500, error);
 
   return this;
-})
+});
+
+/**
+ * The Content-Type of the response. This defaults to text/html with a charset
+ * preset inherited from the charset property.
+ *
+ * @type {String}
+ * @public
+ */
+Pagelet.set('contentType', function get() {
+  return this._contentType +';charset='+ this.charset
+}, function set(value) {
+  return this._contentType = value;
+});
 
 /**
  * Checks if we're an active Pagelet or if we still need to a do an check
