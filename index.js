@@ -834,7 +834,6 @@ Pagelet.set('contentType', function get() {
  * @public
  */
 Pagelet.set('bootstrap', function get() {
-  console.log(!this._bootstrap, this.name)
   return !this._bootstrap && this.name === 'bootstrap' ? this : this._bootstrap || {};
 }, function set(value) {
   return this._bootstrap = value;
