@@ -59,8 +59,8 @@ function Pagelet(options) {
   this._params = options.params;                  // Params extracted from the route.
   this._temper = options.temper;                  // Attach the Temper instance.
   this._append = !options.parent;                 // Append content client-side.
-  this._bootstrap = options.bootstrap || {};      // Reference to bootstrap Pagelet.
 
+  this.bootstrap = options.bootstrap;             // Reference to bootstrap Pagelet.
   this.debug = debug('pagelet:'+ this.name);      // Namespaced debug method
 
   //
@@ -372,7 +372,7 @@ Pagelet.writable('get', function get(done) {
 Pagelet.readable('params', {
   enumerable: false,
   get: function params() {
-    return this._params || this._bootstrap._params || Object.create(null);
+    return this._params || this.bootstrap._params || Object.create(null);
   }
 }, true);
 
@@ -602,7 +602,7 @@ Pagelet.readable('discover', function discover() {
     }, function work(next) {
       var Child = children.shift()
         , test = new Child({
-            bootstrap: pagelet._bootstrap,
+            bootstrap: pagelet.bootstrap,
             pipe: pagelet._pipe,
             res: res,
             req: req
@@ -674,7 +674,7 @@ Pagelet.readable('sync', function render(err, data) {
       });
     }, function done(error) {
       if (error) return pagelet.capture(error);
-      pagelet._bootstrap.render().reduce().end();
+      pagelet.bootstrap.render().reduce().end();
     });
   }).discover();
 });
@@ -699,7 +699,7 @@ Pagelet.readable('async', function render(err, data) {
   // Flush the initial headers asap so the browser can start detect encoding
   // start downloading assets and prepare for rendering additional pagelets.
   //
-  pagelet._bootstrap.render().flush(function flushed(error) {
+  pagelet.bootstrap.render().flush(function flushed(error) {
     if (error) return pagelet.capture(error);
 
     pagelet.once('discover', function discovered() {
@@ -749,7 +749,7 @@ Pagelet.readable('write', function write(name, fragment) {
   }
 
   this.debug('Queueing data fragment');
-  return this._bootstrap.queue(name, fragment);
+  return this.bootstrap.queue(name, fragment);
 });
 
 /**
@@ -777,9 +777,9 @@ Pagelet.readable('end', function end(fragment) {
   //
   // Do not close the connection before all pagelets are send.
   //
-  if (this._bootstrap.length) {
+  if (this.bootstrap.length) {
     this.debug('Not all pagelets have been written, (%s out of %s)',
-      this._bootstrap.length, this.length
+      this.bootstrap.length, this.length
     );
     return false;
   }
@@ -787,7 +787,7 @@ Pagelet.readable('end', function end(fragment) {
   //
   // Everything is processed, close the connection and clean up references.
   //
-  this._bootstrap.flush(function close() {
+  this.bootstrap.flush(function close() {
     pagelet.debug('Closed the connection');
     pagelet._res.end();
   });
@@ -821,9 +821,23 @@ Pagelet.readable('capture', function capture(error) {
  * @public
  */
 Pagelet.set('contentType', function get() {
-  return this._contentType +';charset='+ this.charset
+  return this._contentType +';charset='+ this.charset;
 }, function set(value) {
   return this._contentType = value;
+});
+
+/**
+ * Returns reference to bootstrap Pagelet, which could be the Pagelet itself.
+ * Allows more chaining and valid bootstrap Pagelet references.
+ *
+ * @type {String}
+ * @public
+ */
+Pagelet.set('bootstrap', function get() {
+  console.log(!this._bootstrap, this.name)
+  return !this._bootstrap && this.name === 'bootstrap' ? this : this._bootstrap || {};
+}, function set(value) {
+  return this._bootstrap = value;
 });
 
 /**
@@ -887,7 +901,7 @@ Pagelet.readable('render', function render(options, fn) {
     data.remove = active ? false : pagelet.remove;        // Remove from DOM.
     data.parent = pagelet._parent;                        // Send parent name along.
     data.append = pagelet._append;                        // Content should be appended.
-    data.remaining = pagelet._bootstrap.length;           // Remaining pagelets number.
+    data.remaining = pagelet.bootstrap.length;            // Remaining pagelets number.
     data.hash = {
       error: temper.fetch(pagelet.error).hash.client,     // MD5 hash of error view.
       client: temper.fetch(pagelet.view).hash.client      // MD5 hash of client view.
