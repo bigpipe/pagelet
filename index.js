@@ -9,7 +9,8 @@ var Formidable = require('formidable').IncomingForm
   , Route = require('routable')
   , fuse = require('fusing')
   , async = require('async')
-  , path = require('path');
+  , path = require('path')
+  , url = require('url');
 
 //
 // Cache long prototype lookups to increase speed + write shorter code.
@@ -400,6 +401,25 @@ Pagelet.readable('child', function child(name) {
 });
 
 /**
+ * Helper to invoke a specific route with an optionally provided method.
+ * Useful for serving a pagelet after handling POST requests for example.
+ *
+ * @param {String} route Registered path.
+ * @param {String} method Optional HTTP verb.
+ * @returns {Pagelet} fluent interface.
+ */
+Pagelet.readable('serve', function serve(route, method) {
+  var req = this._req
+    , res = this._res;
+
+  req.method = (method || 'get').toUpperCase();
+  req.uri = url.parse(route);
+
+  this._pipe.router(req, res);
+  return this;
+});
+
+/**
  * Helper to check if the pagelet has a child pagelet by name, must use
  * prototype.name since pagelets are not always constructed yet.
  *
@@ -512,7 +532,7 @@ Pagelet.readable('read', function read() {
     form.removeAllListeners();
 
     if (before) {
-      before.call(context, fields, files, pagelet[pagelet.mode].bind(pagelet));
+      before.call(context, fields, files);
     }
   });
 
@@ -533,7 +553,7 @@ Pagelet.readable('read', function read() {
       return form;
     }
 
-    callback.call(contexts || context, fields, files, pagelet[pagelet.mode].bind(pagelet));
+    callback.call(contexts || context, fields, files);
     return form;
   };
 
