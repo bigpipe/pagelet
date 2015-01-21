@@ -6,6 +6,7 @@ var Formidable = require('formidable').IncomingForm
   , helpers = require('./helpers')
   , debug = require('diagnostics')
   , dot = require('dot-component')
+  , destroy = require('demolish')
   , Route = require('routable')
   , fuse = require('fusing')
   , async = require('async')
@@ -1051,12 +1052,12 @@ Pagelet.readable('conditional', function conditional(req, list, fn) {
  *
  * @api public
  */
-Pagelet.readable('destroy', function destroy() {
-  this._temper = this._pipe = null;
-  this.removeAllListeners();
+Pagelet.readable('destroy', destroy([
+  '_temper', '_pipe', '_enabled', '_disabled', '_pagelets'
+], {
+  after: 'removeAllListeners'
+}));
 
-  return this;
-});
 
 /**
  * Expose the Pagelet on the exports and parse our the directory. This ensures
