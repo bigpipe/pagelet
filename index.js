@@ -960,6 +960,12 @@ Pagelet.readable('render', function render(options, fn) {
         , content;
 
       //
+      // Add some template defaults.
+      //
+      result = result || {};
+      if (!('path' in result)) result.path = pagelet.path;
+
+      //
       // We've made it this far, but now we have to cross our fingers and HOPE
       // that our given template can actually handle the data correctly
       // without throwing an error. As the rendering is done synchronously, we
@@ -973,7 +979,7 @@ Pagelet.readable('render', function render(options, fn) {
           throw err; // Throw so we can capture it again.
         }
 
-        content = view(result || {});
+        content = view(result);
       } catch (e) {
         //
         // This is basically fly or die, if the supplied error template throws
