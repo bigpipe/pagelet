@@ -60,7 +60,7 @@ function Pagelet(options) {
   this._pipe = options.pipe;                      // Actual pipe instance.
   this._params = options.params;                  // Params extracted from the route.
   this._temper = options.temper;                  // Attach the Temper instance.
-  this._append = !options.parent;                 // Append content client-side.
+  this._append = options.append || false;         // Append content client-side.
 
   this.bootstrap = options.bootstrap;             // Reference to bootstrap Pagelet.
   this.debug = debug('pagelet:'+ this.name);      // Namespaced debug method
@@ -527,7 +527,7 @@ Pagelet.readable('read', function read() {
   }).on('file', function file(key, value) {
     files[key] = value;
   }).on('error', function error(err) {
-    pagelet[pagelet.mode](err);
+    pagelet.capture(err, true);
     fields = files = {};
   }).on('end', function end() {
     form.removeAllListeners();
@@ -659,23 +659,16 @@ Pagelet.readable('discover', function discover() {
 });
 
 /**
- * Mode: sync
+ * Mode: Synchronous
  * Output the pagelets fully rendered in the HTML template.
  *
  * @TODO remove pagelet's that have `authorized` set to `false`
  * @TODO Also write the CSS and JavaScript.
  *
- * @param {Error} err Failed to process POST.
- * @param {Object} data Optional data from POST.
- * @returns {Pagelet} fluent interface.
  * @api private
  */
-Pagelet.readable('sync', function render(err, data) {
-  if (err) return this.capture(err);
-
+Pagelet.readable('sync', function synchronous() {
   var pagelet = this;
-
-  pagelet.debug('Processing the pagelets in `sync` mode');
 
   //
   // Because we're synchronously rendering the pagelets we need to discover
@@ -684,60 +677,52 @@ Pagelet.readable('sync', function render(err, data) {
   // styling available.
   //
   pagelet.once('discover', function discovered() {
-    async.each(pagelet._enabled.concat(pagelet._disabled), function each(pagelet, next) {
-      pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
+    pagelet.debug('Processing the pagelets in `sync` mode');
 
-      pagelet.render({ mode: 'sync', data: data }, function rendered(error, content) {
-        if (error) return next(error);
+    async.each(pagelet._enabled.concat(pagelet._disabled), function render(child, next) {
+      pagelet.debug('Invoking pagelet %s/%s render', child.name, child.id);
 
-        pagelet.write(pagelet.name, content);
+      child.render({ mode: 'sync' }, function rendered(error, content) {
+        if (error) return render(child.capture(error), next);
+
+        child.write(content);
         next();
       });
-    }, function done(error) {
-      if (error) return pagelet.capture(error);
+    }, function done() {
       pagelet.bootstrap.render().reduce().end();
     });
   }).discover();
 });
 
 /**
- * Mode: Async
+ * Mode: Asynchronous
  * Output the pagelets as fast as possible.
  *
- * @param {Error} err Failed to process POST.
- * @param {Object} data Optional data from POST.
- * @returns {Pagelet} fluent interface.
  * @api private
  */
-Pagelet.readable('async', function render(err, data) {
-  if (err) return this.capture(err);
-
+Pagelet.readable('async', function asynchronous() {
   var pagelet = this;
-
-  pagelet.debug('Processing the pagelets in `async` mode');
 
   //
   // Flush the initial headers asap so the browser can start detect encoding
   // start downloading assets and prepare for rendering additional pagelets.
   //
-  pagelet.bootstrap.render().flush(function flushed(error) {
-    if (error) return pagelet.capture(error);
+  pagelet.bootstrap.render().flush(function headers(error) {
+    if (error) return pagelet.capture(error, true);
 
     pagelet.once('discover', function discovered() {
-      async.each(pagelet._enabled.concat(pagelet._disabled), function (pagelet, next) {
-        pagelet.debug('Invoking pagelet %s/%s render', pagelet.name, pagelet.id);
+      pagelet.debug('Processing the pagelets in `async` mode');
 
-        pagelet.render({
-          data: pagelet._pipe._compiler.pagelet(pagelet)
+      async.each(pagelet._enabled.concat(pagelet._disabled), function render(child, next) {
+        pagelet.debug('Invoking pagelet %s/%s render', child.name, child.id);
+
+        child.render({
+          data: pagelet._pipe._compiler.pagelet(child)
         }, function rendered(error, content) {
-          if (error) return next(error);
-
-          pagelet.write(pagelet.name, content).flush(next);
+          if (error) return render(child.capture(error), next);
+          child.write(content).flush(next);
         });
-      }, function done(error) {
-        if (error) return pagelet.capture(error);
-        pagelet.end();
-      });
+      }, pagelet.end.bind(pagelet));
     }).discover();
   });
 });
@@ -746,12 +731,10 @@ Pagelet.readable('async', function render(err, data) {
  * Mode: pipeline
  * Output the pagelets as fast as possible but in order.
  *
- * @param {Error} err Failed to process POST.
- * @param {Object} data Optional data from POST.
  * @returns {Pagelet} fluent interface.
  * @api private
  */
-Pagelet.readable('pipeline', function render(err, data) {
+Pagelet.readable('pipeline', function render() {
   throw new Error('Not Implemented');
 });
 
@@ -759,41 +742,40 @@ Pagelet.readable('pipeline', function render(err, data) {
  * Process the pagelet for an async or pipeline based render flow.
  *
  * @param {String} name Optional name, defaults to pagelet.name.
- * @param {Mixed} fragment Content returned from Pagelet.render().
+ * @param {Mixed} chunk Content of Pagelet.
  * @returns {Bootstrap} Reference to bootstrap Pagelet.
  * @api private
  */
-Pagelet.readable('write', function write(name, fragment) {
-  if (!fragment) {
-    fragment = name;
+Pagelet.readable('write', function write(name, chunk) {
+  if (!chunk) {
+    chunk = name;
     name = this.name;
   }
 
-  this.debug('Queueing data fragment');
-  return this.bootstrap.queue(name, fragment);
+  //
+  // The chunk could potentially be an error, capture it before
+  // its pushed to the queue.
+  //
+  if (chunk instanceof Error) return this.capture(error);
+
+  this.debug('Queueing data chunk');
+  return this.bootstrap.queue(name, this._parent, chunk);
 });
 
 /**
  * Close the connection once all pagelets are sent.
  *
+ * @param {Mixed} chunk Fragment of data.
  * @returns {Boolean} Closed the connection.
  * @api private
  */
-Pagelet.readable('end', function end(fragment) {
+Pagelet.readable('end', function end(chunk) {
   var pagelet = this;
 
   //
-  // The connection was already closed, no need to further process it.
+  // Write data chunk to the queue.
   //
-  if (this._res.finished) {
-    this.debug('Pagelet has finished, ignoring extra .end call');
-    return true;
-  }
-
-  //
-  // Write the fragment that was provided to the flush queue.
-  //
-  if (fragment) this.write(fragment);
+  if (chunk) this.write(chunk);
 
   //
   // Do not close the connection before all pagelets are send.
@@ -808,7 +790,9 @@ Pagelet.readable('end', function end(fragment) {
   //
   // Everything is processed, close the connection and clean up references.
   //
-  this.bootstrap.flush(function close() {
+  this.bootstrap.flush(function close(error) {
+    if (error) return pagelet.capture(error, true);
+
     pagelet.debug('Closed the connection');
     pagelet._res.end();
   });
@@ -824,14 +808,13 @@ Pagelet.readable('end', function end(fragment) {
  * to the client and we're presented with an error.
  *
  * @param {Error} error Optional error argument to trigger the error pagelet.
+ * @param {Boolean} bootstrap Trigger full bootstrap if true.
  * @returns {Pagelet} Reference to Pagelet.
  * @api private
  */
-Pagelet.readable('capture', function capture(error) {
+Pagelet.readable('capture', function capture(error, bootstrap) {
   this.debug('Captured an error: %s, displaying error pagelet instead', error);
-  this._pipe.status(this._req, this._res, 500, error);
-
-  return this;
+  return this._pipe.status(this, 500, error, bootstrap);
 });
 
 /**
@@ -1087,21 +1070,19 @@ Pagelet.on = function on(module) {
   var prototype = this.prototype
     , dir = prototype.directory = path.dirname(module.filename);
 
-  prototype.error = prototype.error
-    ? path.resolve(dir, prototype.error)
-    : path.resolve(__dirname, 'error.html');
-
   //
-  // Resolve the view to make sure an absolute path is provided to Temper.
+  // Resolve the view and error templates to ensure
+  // absolute paths are provided to Temper.
   //
+  if (prototype.error) prototype.error = path.resolve(dir, prototype.error);
   if (prototype.view) prototype.view = path.resolve(dir, prototype.view);
 
   return module.exports = this;
 };
 
 /**
- * Discover all pagelets recursive. Fabricate will create constructable instances
- * from the provided value of prototype.pagelets.
+ * Discover all pagelets recursive. Fabricate will create constructable
+ * instances from the provided value of prototype.pagelets.
  *
  * @param {String} parent Reference to the parent pagelet name.
  * @return {Array} collection of pagelets instances.
