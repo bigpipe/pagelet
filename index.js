@@ -756,7 +756,7 @@ Pagelet.readable('write', function write(name, chunk) {
   // The chunk could potentially be an error, capture it before
   // its pushed to the queue.
   //
-  if (chunk instanceof Error) return this.capture(error);
+  if (chunk instanceof Error) return this.capture(chunk);
 
   this.debug('Queueing data chunk');
   return this.bootstrap.queue(name, this._parent, chunk);
@@ -880,6 +880,7 @@ Pagelet.readable('render', function render(options, fn) {
   options = options || {};
 
   var context = options.context || this
+    , compiler = this._pipe._compiler
     , mode = options.mode || 'async'
     , data = options.data || {}
     , temper = this._temper
@@ -899,17 +900,16 @@ Pagelet.readable('render', function render(options, fn) {
     if (!active) content = '';
     if (mode === 'sync') return fn.call(context, undefined, content);
 
-    data.id = data.id || pagelet.id;                      // Pagelet id.
-    data.path = data.path || pagelet.path;                // Reference to the path.
-    data.mode = data.mode || pagelet.mode;                // Pagelet render mode.
-    data.remove = active ? false : pagelet.remove;        // Remove from DOM.
-    data.parent = pagelet._parent;                        // Send parent name along.
-    data.append = pagelet._append;                        // Content should be appended.
-    data.remaining = pagelet.bootstrap.length;            // Remaining pagelets number.
-    data.hash = {
-      error: temper.fetch(pagelet.error).hash.client,     // MD5 hash of error view.
-      client: temper.fetch(pagelet.view).hash.client      // MD5 hash of client view.
-    };
+    data.id = data.id || pagelet.id;                 // Pagelet id.
+    data.path = data.path || pagelet.path;           // Reference to the path.
+    data.mode = data.mode || pagelet.mode;           // Pagelet render mode.
+    data.remove = active ? false : pagelet.remove;   // Remove from DOM.
+    data.parent = pagelet._parent;                   // Send parent name along.
+    data.append = pagelet._append;                   // Content should be appended.
+    data.remaining = pagelet.bootstrap.length;       // Remaining pagelets number.
+
+    data.error = compiler.resolve(pagelet.error);    // Path of error view.
+    data.client = compiler.resolve(pagelet.view);    // Path of client view.
 
     data = pagelet.stringify(data, function sanitize(key, data) {
       if ('string' !== typeof data) return data;
