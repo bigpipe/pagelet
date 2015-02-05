@@ -923,6 +923,7 @@ Pagelet.readable('render', function render(options, fn) {
     });
 
     fn.call(context, undefined, pagelet.fragment
+      .replace(/\{pagelet:id\}/g, pagelet.id)
       .replace(/\{pagelet:name\}/g, pagelet.name)
       .replace(/\{pagelet:template\}/g, content.replace(/<!--(.|\s)*?-->/, ''))
       .replace(/\{pagelet:data\}/g, data)
