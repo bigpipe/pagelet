@@ -386,7 +386,7 @@ Pagelet.readable('params', {
  * @api private
  */
 Pagelet.set('length', function length() {
-  return this._children.length + 1;
+  return this._children.length;
 });
 
 /**
@@ -780,7 +780,7 @@ Pagelet.readable('end', function end(chunk) {
   //
   // Do not close the connection before all pagelets are send.
   //
-  if (this.bootstrap.length) {
+  if (this.bootstrap.length > 0) {
     this.debug('Not all pagelets have been written, (%s out of %s)',
       this.bootstrap.length, this.length
     );
