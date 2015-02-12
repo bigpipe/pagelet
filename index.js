@@ -1100,6 +1100,12 @@ Pagelet.children = function children(parent, stack) {
     source: this.prototype.directory,
     recursive: 'string' === typeof pagelets
   }).reduce(function each(stack, Pagelet) {
+    //
+    // Pagelet could be conditional, simple crawl this function
+    // again to get the children of each conditional.
+    //
+    if (Array.isArray(Pagelet)) return Pagelet.reduce(each, []);
+
     var name = Pagelet.prototype.name;
     log('Recursive discovery of child pagelet %s', name);
 
