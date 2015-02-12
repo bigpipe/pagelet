@@ -247,7 +247,7 @@ Pagelet.writable('query', []);
  * @type {String}
  * @public
  */
-Pagelet.writable('view', '');
+Pagelet.writable('view', null);
 
 /**
  * The location of your error template. This template will be rendered when:
