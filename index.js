@@ -1273,6 +1273,8 @@ Pagelet.optimize = function optimize(options, done) {
         }
       }, step);
     }, function optimized(error, children) {
+      log('optimized all %d child pagelets', children.length);
+
       if (error) return next(error);
 
       //
