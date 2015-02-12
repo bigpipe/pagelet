@@ -1,8 +1,11 @@
-# Pagelet [![Build Status][status]](https://travis-ci.org/bigpipe/pagelet) [![NPM version][npmimgurl]](http://badge.fury.io/js/pagelet) [![Coverage Status][coverage]](http://coveralls.io/r/bigpipe/pagelet?branch=master)
+# Pagelet
 
-[status]: https://travis-ci.org/bigpipe/pagelet.png
-[npmimgurl]: https://badge.fury.io/js/pagelet.png
-[coverage]: http://coveralls.io/repos/bigpipe/pagelet/badge.png?branch=master
+[![Version npm][version]](http://browsenpm.org/package/pagelet)[![Build Status][build]](https://travis-ci.org/bigpipe/pagelet)[![Dependencies][david]](https://david-dm.org/bigpipe/pagelet)[![Coverage Status][cover]](https://coveralls.io/r/bigpipe/pagelet?branch=master)
+
+[version]: http://img.shields.io/npm/v/pagelet.svg?style=flat-square
+[build]: http://img.shields.io/travis/bigpipe/pagelet/master.svg?style=flat-square
+[david]: https://img.shields.io/david/bigpipe/pagelet.svg?style=flat-square
+[cover]: http://img.shields.io/coveralls/bigpipe/pagelet/master.svg?style=flat-square
 
 ## Installation
 
@@ -276,8 +279,8 @@ left behind.
 
 ```js
 Pagelet.extend({
-  if: function conditional(req, next) { 
-    next(false); 
+  if: function conditional(req, next) {
+    next(false);
   },
   remove: false
 }).on(module);
