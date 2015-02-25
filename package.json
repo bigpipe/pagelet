@@ -35,7 +35,7 @@
     "fusing": "1.0.x",
     "json-stringify-safe": "5.0.x",
     "routable": "0.0.x",
-    "temper": "0.2.x"
+    "temper": "0.3.x"
   },
   "devDependencies": {
     "assume": "1.1.x",
