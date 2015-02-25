@@ -600,8 +600,6 @@ Pagelet.readable('stringify', function stringify(data, replacer) {
  * @api private
  */
 Pagelet.readable('discover', function discover() {
-  if (!this.length) return this.emit('discover');
-
   var req = this._req
     , res = this._res
     , pagelet = this;
