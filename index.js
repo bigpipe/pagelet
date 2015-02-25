@@ -385,7 +385,7 @@ Pagelet.readable('params', {
  * @return {Number} Length of queue
  * @api private
  */
-Pagelet.set('length', function length() {
+Pagelet.get('length', function length() {
   return this._children.length;
 });
 
