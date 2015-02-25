@@ -109,6 +109,13 @@ describe('Pagelet', function () {
     });*/
   });
 
+  describe('.length', function () {
+    it('is a getter that returns the childrens length', function () {
+      pagelet._children = [ 1, 2, 3 ];
+      assume(pagelet.length).to.equal(3);
+    });
+  });
+
   describe('.children', function () {
     it('is a function', function () {
       assume(Pagelet.children).to.be.a('function');
