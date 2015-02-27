@@ -856,6 +856,23 @@ Pagelet.set('active', function get() {
 });
 
 /**
+ * Proxy to return the compiled server template from Temper.
+ *
+ * @param {String} view Absolute path to the templates location.
+ * @param {Object} data Used to render the server-side template.
+ * @return {String} Generated HTML.
+ * @public
+ */
+Pagelet.readable('template', function template(view, data) {
+  if ('string' !== typeof view) {
+    data = view;
+    view = this.view;
+  }
+
+  return this._temper.fetch(view).server(data || {});
+});
+
+/**
  * Render takes care of all the data merging and `get` invocation.
  *
  * Options:

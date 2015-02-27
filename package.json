@@ -42,6 +42,7 @@
     "bigpipe": "bigpipe/bigpipe",
     "istanbul": "0.3.x",
     "mocha": "2.1.x",
-    "pre-commit": "1.0.x"
+    "pre-commit": "1.0.x",
+    "react": "0.12.x"
   }
 }

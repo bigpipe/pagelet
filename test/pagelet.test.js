@@ -5,6 +5,7 @@ describe('Pagelet', function () {
     , Temper = require('temper')
     , Pipe = require('bigpipe')
     , assume = require('assume')
+    , React = require('react')
     , server = require('http').createServer()
     , pagelet, P;
 
@@ -27,7 +28,7 @@ describe('Pagelet', function () {
       ]
     });
 
-    pagelet = new P;
+    pagelet = new P({ temper: temper });
   });
 
   afterEach(function each() {
@@ -113,6 +114,49 @@ describe('Pagelet', function () {
     it('is a getter that returns the childrens length', function () {
       pagelet._children = [ 1, 2, 3 ];
       assume(pagelet.length).to.equal(3);
+    });
+  });
+
+  describe('.template', function () {
+    it('is a function', function () {
+      assume(Pagelet.prototype.template).to.be.a('function');
+      assume(P.prototype.template).to.be.a('function');
+      assume(Pagelet.prototype.template).to.equal(P.prototype.template);
+      assume(pagelet.template).to.equal(P.prototype.template);
+    });
+
+    it('returns compiled server template from Temper by path', function () {
+      var result = pagelet.template(__dirname + '/fixtures/view.html', {
+        test: 'data'
+      });
+
+      assume(result).to.be.a('string');
+      assume(result).to.equal('<h1>Some data fixture</h1>');
+    });
+
+    it('returns compiled server React template for jsx templates', function () {
+      var result = pagelet.template(__dirname + '/fixtures/view.jsx', {
+        Component: React.createClass({
+          render: function () {
+            return (
+              React.createElement('span', null, 'some text')
+            )
+          }
+        }),
+        test: 'data'
+      });
+
+      assume(result).to.be.a('object');
+      assume(React.isValidElement(result)).is.true();
+    });
+
+    it('defaults to the pagelets view if no path is provided', function() {
+      var result = new (P.extend().on(module))({ temper: temper }).template({
+        test: 'data'
+      });
+
+      assume(result).to.be.a('string');
+      assume(result).to.equal('<h1>Some data fixture</h1>');
     });
   });
 
