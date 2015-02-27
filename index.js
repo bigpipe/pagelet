@@ -961,7 +961,7 @@ Pagelet.readable('render', function render(options, fn) {
           throw err; // Throw so we can capture it again.
         }
 
-        content = view(result);
+        content = view(result, { html: true });
       } catch (e) {
         //
         // This is basically fly or die, if the supplied error template throws
@@ -978,7 +978,7 @@ Pagelet.readable('render', function render(options, fn) {
           message: e.message,
           stack: e.stack,
           error: e
-        }));
+        }), { html: true });
       }
 
       //
