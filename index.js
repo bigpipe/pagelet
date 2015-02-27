@@ -980,6 +980,10 @@ Pagelet.readable('render', function render(options, fn) {
 
         content = view(result, { html: true });
       } catch (e) {
+        if ('production' !== process.env.NODE_ENV) {
+          pagelet.debug('Captured rendering error: %s', e.stack);
+        }
+
         //
         // This is basically fly or die, if the supplied error template throws
         // an error while rendering we're basically fucked, your server will
