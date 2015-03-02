@@ -643,7 +643,7 @@ Pagelet.readable('discover', function discover() {
     });
   }, function discovered(err, children) {
     pagelet._disabled = children.disabled;
-    pagelet._enabled = children.enabled.concat(pagelet);
+    pagelet._enabled = children.enabled;
 
     pagelet._enabled.forEach(function initialize(child) {
       if ('function' === typeof child.initialize) child.initialize();
@@ -666,7 +666,8 @@ Pagelet.readable('discover', function discover() {
  * @api private
  */
 Pagelet.readable('sync', function synchronous() {
-  var pagelet = this;
+  var pagelet = this
+    , pagelets = this._enabled.concat(this._disabled, this);
 
   //
   // Because we're synchronously rendering the pagelets we need to discover
@@ -677,7 +678,7 @@ Pagelet.readable('sync', function synchronous() {
   pagelet.once('discover', function discovered() {
     pagelet.debug('Processing the pagelets in `sync` mode');
 
-    async.each(pagelet._enabled.concat(pagelet._disabled), function render(child, next) {
+    async.each(pagelets, function render(child, next) {
       pagelet.debug('Invoking pagelet %s/%s render', child.name, child.id);
 
       child.render({ mode: 'sync' }, function rendered(error, content) {
@@ -699,7 +700,8 @@ Pagelet.readable('sync', function synchronous() {
  * @api private
  */
 Pagelet.readable('async', function asynchronous() {
-  var pagelet = this;
+  var pagelet = this
+    , pagelets = this._enabled.concat(this._disabled, this);
 
   //
   // Flush the initial headers asap so the browser can start detect encoding
@@ -711,7 +713,7 @@ Pagelet.readable('async', function asynchronous() {
     pagelet.once('discover', function discovered() {
       pagelet.debug('Processing the pagelets in `async` mode');
 
-      async.each(pagelet._enabled.concat(pagelet._disabled), function render(child, next) {
+      async.each(pagelets, function render(child, next) {
         pagelet.debug('Invoking pagelet %s/%s render', child.name, child.id);
 
         child.render({
