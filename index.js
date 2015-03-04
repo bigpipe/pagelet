@@ -929,6 +929,10 @@ Pagelet.readable('render', function render(options, fn) {
 
     data.error = compiler.resolve(pagelet.error);    // Path of error view.
     data.client = compiler.resolve(pagelet.view);    // Path of client view.
+    data.hash = {
+      error: temper.fetch(pagelet.error).hash.client,
+      client: temper.fetch(pagelet.view).hash.client
+    };
 
     data = pagelet.stringify(data, function sanitize(key, data) {
       if ('string' !== typeof data) return data;
