@@ -52,25 +52,25 @@ function Pagelet(options) {
   //
   if (options.pipe && options.pipe._temper) options.temper = options.pipe._temper;
 
-  this._enabled = [];                             // Contains all enabled pagelets.
-  this._disabled = [];                            // Contains all disable pagelets.
-  this._active = null;                            // Are we active.
-  this._req = options.req;                        // Incoming HTTP request.
-  this._res = options.res;                        // Incoming HTTP response.
-  this._pipe = options.pipe;                      // Actual pipe instance.
-  this._params = options.params;                  // Params extracted from the route.
-  this._temper = options.temper;                  // Attach the Temper instance.
-  this._append = options.append || false;         // Append content client-side.
+  this.writable('_enabled', []);                        // Contains all enabled pagelets.
+  this.writable('_disabled', []);                       // Contains all disable pagelets.
+  this.writable('_active', null);                       // Are we active.
+  this.writable('_req', options.req);                   // Incoming HTTP request.
+  this.writable('_res', options.res);                   // Incoming HTTP response.
+  this.writable('_pipe', options.pipe);                 // Actual pipe instance.
+  this.writable('_params', options.params);             // Params extracted from the route.
+  this.writable('_temper', options.temper);             // Attach the Temper instance.
+  this.writable('_append', options.append || false);    // Append content client-side.
 
-  this.bootstrap = options.bootstrap;             // Reference to bootstrap Pagelet.
-  this.debug = debug('pagelet:'+ this.name);      // Namespaced debug method
+  this.writable('bootstrap', options.bootstrap);        // Reference to bootstrap Pagelet.
+  this.writable('debug', debug('pagelet:'+ this.name)); // Namespaced debug method
 
   //
   // Allow overriding the reference to parent pagelet.
   // A reference to the parent is normally set on the
   // constructor prototype by optimize.
   //
-  if (options.parent) this._parent = options.parent;
+  if (options.parent) this.writable('_parent', options.parent);
 }
 
 fuse(Pagelet, require('eventemitter3'));
