@@ -926,10 +926,7 @@ Pagelet.readable('render', function render(options, fn) {
     data.parent = pagelet._parent;                   // Send parent name along.
     data.append = pagelet._append;                   // Content should be appended.
     data.remaining = pagelet.bootstrap.length;       // Remaining pagelets number.
-
-    data.error = compiler.resolve(pagelet.error);    // Path of error view.
-    data.client = compiler.resolve(pagelet.view);    // Path of client view.
-    data.hash = {
+    data.hash = {                                    // Temper md5's for template ref
       error: temper.fetch(pagelet.error).hash.client,
       client: temper.fetch(pagelet.view).hash.client
     };
