@@ -936,8 +936,8 @@ Pagelet.readable('render', function render(options, fn) {
 
     fn.call(context, undefined, framework.get('fragment', {
       template: content.replace(/<!--(.|\s)*?-->/, ''),
-      name: pagelet.name,
-      id: pagelet.id,
+      name: JSON.stringify(pagelet.name),
+      id: JSON.stringify(pagelet.id),
       data: data
     }));
 
