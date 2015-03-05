@@ -39,6 +39,7 @@ function generator() {
  * It's basically a small sandboxed application within your application.
  *
  * @constructor
+ * @param {Object} options Optional configuration.
  * @api public
  */
 function Pagelet(options) {
@@ -346,7 +347,7 @@ Pagelet.writable('_contentType', 'text/html');
  * Default asynchronous get function. Override to provide specific data to the
  * render function.
  *
- * @param {Function} done Completion callback when we've received data to render
+ * @param {Function} done Completion callback when we've received data to render.
  * @api public
  */
 Pagelet.writable('get', function get(done) {
@@ -370,7 +371,7 @@ Pagelet.readable('params', {
  * Report the length of the queue (e.g. amount of children). The length
  * is increased with one as the reporting pagelet is part of the queue.
  *
- * @return {Number} Length of queue
+ * @return {Number} Length of queue.
  * @api private
  */
 Pagelet.get('length', function length() {
@@ -804,6 +805,7 @@ Pagelet.readable('end', function end(chunk) {
  */
 Pagelet.readable('capture', function capture(error, bootstrap) {
   this.debug('Captured an error: %s, displaying error pagelet instead', error);
+
   return this._bigpipe.status(this, 500, error, bootstrap);
 });
 
