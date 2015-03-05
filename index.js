@@ -50,14 +50,16 @@ function Pagelet(options) {
   //
   // Use the temper instance on Pipe if available.
   //
-  if (options.pipe && options.pipe._temper) options.temper = options.pipe._temper;
+  if (options.pipe && options.pipe._temper) {
+    options.temper = options.pipe._temper;
+  }
 
   this.writable('_enabled', []);                        // Contains all enabled pagelets.
   this.writable('_disabled', []);                       // Contains all disable pagelets.
   this.writable('_active', null);                       // Are we active.
   this.writable('_req', options.req);                   // Incoming HTTP request.
   this.writable('_res', options.res);                   // Incoming HTTP response.
-  this.writable('_pipe', options.pipe);                 // Actual pipe instance.
+  this.writable('_bigpipe', options.pipe);              // Actual pipe instance.
   this.writable('_params', options.params);             // Params extracted from the route.
   this.writable('_temper', options.temper);             // Attach the Temper instance.
   this.writable('_append', options.append || false);    // Append content client-side.
@@ -201,20 +203,6 @@ Pagelet.writable('if', null);
  * @public
  */
 Pagelet.writable('initialize', null);
-
-/**
- * The actual chunk of the response that is written for each pagelet. The
- * current template is compatible with our `bigpipe.js` client code but if you
- * want to use the pagelets as a stand alone template/view you might want to
- * change this to a simple string.
- *
- * @type {String}
- * @public
- */
-Pagelet.writable('fragment', require('fs').readFileSync(__dirname +'/pagelet.fragment', 'utf-8')
-  .split('\n')
-  .join('')
-);
 
 /**
  * Remove the DOM element if we are not enabled. This will make it easier to
@@ -416,7 +404,7 @@ Pagelet.readable('serve', function serve(route, method) {
   req.method = (method || 'get').toUpperCase();
   req.uri = url.parse(route);
 
-  this._pipe.router(req, res);
+  this._bigpipe.router(req, res);
   return this;
 });
 
@@ -480,7 +468,7 @@ Pagelet.readable('init', function init() {
 
       if (!(method in Pagelet.prototype)) return next();
 
-      child = new Child({ pipe: pagelet._pipe });
+      child = new Child({ pipe: pagelet._bigpipe });
       child.conditional(pagelet._req, pagelets, function allowed(accepted) {
         if (!accepted) {
           if (child.destroy) child.destroy();
@@ -622,7 +610,7 @@ Pagelet.readable('discover', function discover() {
       var Child = children.shift()
         , test = new Child({
             bootstrap: pagelet.bootstrap,
-            pipe: pagelet._pipe,
+            pipe: pagelet._bigpipe,
             res: res,
             req: req
           });
@@ -719,7 +707,7 @@ Pagelet.readable('async', function asynchronous() {
         pagelet.debug('Invoking pagelet %s/%s render', child.name, child.id);
 
         child.render({
-          data: pagelet._pipe._compiler.pagelet(child)
+          data: pagelet._bigpipe._compiler.pagelet(child)
         }, function rendered(error, content) {
           if (error) return render(child.capture(error), next);
           child.write(content).flush(next);
@@ -816,7 +804,7 @@ Pagelet.readable('end', function end(chunk) {
  */
 Pagelet.readable('capture', function capture(error, bootstrap) {
   this.debug('Captured an error: %s, displaying error pagelet instead', error);
-  return this._pipe.status(this, 500, error, bootstrap);
+  return this._bigpipe.status(this, 500, error, bootstrap);
 });
 
 /**
@@ -898,10 +886,12 @@ Pagelet.readable('render', function render(options, fn) {
 
   options = options || {};
 
-  var context = options.context || this
-    , compiler = this._pipe._compiler
+  var framework = this._bigpipe._framework
+    , compiler = this._bigpipe._compiler
+    , context = options.context || this
     , mode = options.mode || 'async'
     , data = options.data || {}
+    , bigpipe = this._bigpipe
     , temper = this._temper
     , query = this.query
     , pagelet = this;
@@ -942,12 +932,12 @@ Pagelet.readable('render', function render(options, fn) {
         .replace(/'/gm, '&#x27;');
     });
 
-    fn.call(context, undefined, pagelet.fragment
-      .replace(/\{pagelet:id\}/g, pagelet.id)
-      .replace(/\{pagelet:name\}/g, pagelet.name)
-      .replace(/\{pagelet:template\}/g, content.replace(/<!--(.|\s)*?-->/, ''))
-      .replace(/\{pagelet:data\}/g, data)
-    );
+    fn.call(context, undefined, framework.get('fragment', {
+      template: content.replace(/<!--(.|\s)*?-->/, ''),
+      name: pagelet.name,
+      id: pagelet.id,
+      data: data
+    }));
 
     return pagelet;
   }
@@ -1068,7 +1058,7 @@ Pagelet.readable('conditional', function conditional(req, list, fn) {
  * @api public
  */
 Pagelet.readable('destroy', destroy([
-  '_temper', '_pipe', '_enabled', '_disabled', '_pagelets'
+  '_temper', '_bigpipe', '_enabled', '_disabled', '_pagelets'
 ], {
   after: 'removeAllListeners'
 }));
