@@ -35,6 +35,25 @@ function generator() {
 }
 
 /**
+ * Replacer for JSON so the resulting object can safely be loaded in a script
+ * tag without crashing.
+ *
+ * @param {String} key key that we're replacing.
+ * @param {Mixed} data
+ * @api private
+ */
+function replacer(key, data) {
+  if ('string' !== typeof data) return data;
+
+  return data
+    .replace(/&/gm, '&amp;')
+    .replace(/</gm, '&lt;')
+    .replace(/>/gm, '&gt;')
+    .replace(/"/gm, '&quot;')
+    .replace(/'/gm, '&#x27;');
+}
+
+/**
  * A pagelet is the representation of an item, section, column or widget.
  * It's basically a small sandboxed application within your application.
  *
@@ -896,7 +915,8 @@ Pagelet.readable('render', function render(options, fn) {
     , bigpipe = this._bigpipe
     , temper = this._temper
     , query = this.query
-    , pagelet = this;
+    , pagelet = this
+    , state = {};
 
   /**
    * Write the fragmented data.
@@ -923,19 +943,11 @@ Pagelet.readable('render', function render(options, fn) {
       client: temper.fetch(pagelet.view).hash.client
     };
 
-    data = pagelet.stringify(data, function sanitize(key, data) {
-      if ('string' !== typeof data) return data;
-
-      return data
-        .replace(/&/gm, '&amp;')
-        .replace(/</gm, '&lt;')
-        .replace(/>/gm, '&gt;')
-        .replace(/"/gm, '&quot;')
-        .replace(/'/gm, '&#x27;');
-    });
+    data = pagelet.stringify(data, replacer);
 
     fn.call(context, undefined, framework.get('fragment', {
       template: content.replace(/<!--(.|\s)*?-->/, ''),
+      state: pagelet.stringify(state, replacer),
       name: JSON.stringify(pagelet.name),
       id: JSON.stringify(pagelet.id),
       data: data
@@ -1003,7 +1015,7 @@ Pagelet.readable('render', function render(options, fn) {
       // Add queried parts of data, so the client-side script can use it.
       //
       if ('object' === typeof result && Array.isArray(query) && query.length) {
-        data.data = query.reduce(function find(memo, q) {
+        state = query.reduce(function find(memo, q) {
           memo[q] = dot.get(result, q);
           return memo;
         }, {});
