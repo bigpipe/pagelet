@@ -49,18 +49,18 @@ describe('Pagelet', function () {
 
     assume(pagelet._temper).to.be.an('object');
     assume(property.writable).to.equal(true);
-    assume(property.enumerable).to.equal(true);
+    assume(property.enumerable).to.equal(false);
     assume(property.configurable).to.equal(true);
   });
 
   it('can have reference to pipe instance', function () {
     pagelet = new P({ pipe: pipe });
-    var property = Object.getOwnPropertyDescriptor(pagelet, '_pipe');
+    var property = Object.getOwnPropertyDescriptor(pagelet, '_bigpipe');
 
-    assume(pagelet._pipe).to.be.an('object');
-    assume(pagelet._pipe).to.be.instanceof(Pipe);
+    assume(pagelet._bigpipe).to.be.an('object');
+    assume(pagelet._bigpipe).to.be.instanceof(Pipe);
     assume(property.writable).to.equal(true);
-    assume(property.enumerable).to.equal(true);
+    assume(property.enumerable).to.equal(false);
     assume(property.configurable).to.equal(true);
   });
 
