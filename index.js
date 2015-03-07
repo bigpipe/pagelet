@@ -148,15 +148,6 @@ Pagelet.writable('statusCode', 200);
 Pagelet.writable('pagelets', {});
 
 /**
- * Specify a mode that should be used for node client side rendering, this defaults
- * to HTML. For instance to allow a pagelet to generate SVG elements use mode svg.
- *
- * @type {String}
- * @public
- */
-Pagelet.writable('namespace', 'html');
-
-/**
  * With what kind of generation mode do we need to output the generated
  * pagelets. We're supporting 3 different modes:
  *
