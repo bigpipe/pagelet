@@ -82,9 +82,9 @@ function Pagelet(options) {
   this.writable('_bigpipe', options.pipe);              // Actual pipe instance.
   this.writable('_params', options.params);             // Params extracted from the route.
   this.writable('_temper', options.temper);             // Attach the Temper instance.
+  this.writable('_bootstrap', options.bootstrap);       // Reference to bootstrap Pagelet.
   this.writable('_append', options.append || false);    // Append content client-side.
 
-  this.writable('bootstrap', options.bootstrap);        // Reference to bootstrap Pagelet.
   this.writable('debug', debug('pagelet:'+ this.name)); // Namespaced debug method
 
   //
