@@ -14,7 +14,7 @@ describe('Pagelet', function () {
   // because our pagelet is not exported using `.on(module)`
   //
   var temper = new Temper
-    , pipe = new Pipe(server);
+    , bigpipe = new Pipe(server);
 
   beforeEach(function () {
     P = Pagelet.extend({
@@ -53,8 +53,8 @@ describe('Pagelet', function () {
     assume(property.configurable).to.equal(true);
   });
 
-  it('can have reference to pipe instance', function () {
-    pagelet = new P({ pipe: pipe });
+  it('can have reference to bigpipe instance', function () {
+    pagelet = new P({ bigpipe: bigpipe });
     var property = Object.getOwnPropertyDescriptor(pagelet, '_bigpipe');
 
     assume(pagelet._bigpipe).to.be.an('object');

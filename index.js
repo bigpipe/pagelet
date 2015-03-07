@@ -70,8 +70,8 @@ function Pagelet(options) {
   //
   // Use the temper instance on Pipe if available.
   //
-  if (options.pipe && options.pipe._temper) {
-    options.temper = options.pipe._temper;
+  if (options.bigpipe && options.bigpipe._temper) {
+    options.temper = options.bigpipe._temper;
   }
 
   this.writable('_enabled', []);                        // Contains all enabled pagelets.
@@ -79,9 +79,9 @@ function Pagelet(options) {
   this.writable('_active', null);                       // Are we active.
   this.writable('_req', options.req);                   // Incoming HTTP request.
   this.writable('_res', options.res);                   // Incoming HTTP response.
-  this.writable('_bigpipe', options.pipe);              // Actual pipe instance.
   this.writable('_params', options.params);             // Params extracted from the route.
   this.writable('_temper', options.temper);             // Attach the Temper instance.
+  this.writable('_bigpipe', options.bigpipe);           // Actual pipe instance.
   this.writable('_bootstrap', options.bootstrap);       // Reference to bootstrap Pagelet.
   this.writable('_append', options.append || false);    // Append content client-side.
 
@@ -470,7 +470,7 @@ Pagelet.readable('init', function init() {
 
       if (!(method in Pagelet.prototype)) return next();
 
-      child = new Child({ pipe: pagelet._bigpipe });
+      child = new Child({ bigpipe: pagelet._bigpipe });
       child.conditional(pagelet._req, pagelets, function allowed(accepted) {
         if (!accepted) {
           if (child.destroy) child.destroy();
@@ -483,11 +483,11 @@ Pagelet.readable('init', function init() {
       if (method in pagelet) {
         reader.before(pagelet[method], pagelet);
       } else {
-        pagelet[pagelet.mode]();
+        pagelet._bigpipe[pagelet.mode]();
       }
     });
   } else {
-    this[this.mode]();
+    this._bigpipe[this.mode]();
   }
 });
 
@@ -612,7 +612,7 @@ Pagelet.readable('discover', function discover() {
       var Child = children.shift()
         , test = new Child({
             bootstrap: pagelet.bootstrap,
-            pipe: pagelet._bigpipe,
+            bigpipe: pagelet._bigpipe,
             res: res,
             req: req
           });
@@ -647,90 +647,6 @@ Pagelet.readable('discover', function discover() {
 });
 
 /**
- * Mode: Synchronous
- * Output the pagelets fully rendered in the HTML template.
- *
- * @TODO remove pagelet's that have `authorized` set to `false`
- * @TODO Also write the CSS and JavaScript.
- *
- * @api private
- */
-Pagelet.readable('sync', function synchronous() {
-  var pagelet = this
-    , pagelets;
-
-  //
-  // Because we're synchronously rendering the pagelets we need to discover
-  // which one's are enabled before we send the bootstrap code so it can include
-  // the CSS files of the enabled pagelets in the HEAD of the page so there is
-  // styling available.
-  //
-  pagelet.once('discover', function discovered() {
-    pagelet.debug('Processing the pagelets in `sync` mode');
-
-    pagelets = pagelet._enabled.concat(pagelet._disabled, pagelet);
-    async.each(pagelets, function render(child, next) {
-      pagelet.debug('Invoking pagelet %s/%s render', child.name, child.id);
-
-      child.render({ mode: 'sync' }, function rendered(error, content) {
-        if (error) return render(child.capture(error), next);
-
-        child.write(content);
-        next();
-      });
-    }, function done() {
-      pagelet.bootstrap.render().reduce().end();
-    });
-  }).discover();
-});
-
-/**
- * Mode: Asynchronous
- * Output the pagelets as fast as possible.
- *
- * @api private
- */
-Pagelet.readable('async', function asynchronous() {
-  var pagelet = this
-    , pagelets;
-
-  //
-  // Flush the initial headers asap so the browser can start detect encoding
-  // start downloading assets and prepare for rendering additional pagelets.
-  //
-  pagelet.bootstrap.render().flush(function headers(error) {
-    if (error) return pagelet.capture(error, true);
-
-    pagelet.once('discover', function discovered() {
-      pagelet.debug('Processing the pagelets in `async` mode');
-
-      pagelets = pagelet._enabled.concat(pagelet._disabled, pagelet);
-      async.each(pagelets, function render(child, next) {
-        pagelet.debug('Invoking pagelet %s/%s render', child.name, child.id);
-
-        child.render({
-          data: pagelet._bigpipe._compiler.pagelet(child)
-        }, function rendered(error, content) {
-          if (error) return render(child.capture(error), next);
-          child.write(content).flush(next);
-        });
-      }, pagelet.end.bind(pagelet));
-    }).discover();
-  });
-});
-
-/**
- * Mode: pipeline
- * Output the pagelets as fast as possible but in order.
- *
- * @returns {Pagelet} fluent interface.
- * @api private
- */
-Pagelet.readable('pipeline', function render() {
-  throw new Error('Not Implemented');
-});
-
-/**
  * Process the pagelet for an async or pipeline based render flow.
  *
  * @param {String} name Optional name, defaults to pagelet.name.
@@ -743,12 +659,6 @@ Pagelet.readable('write', function write(name, chunk) {
     chunk = name;
     name = this.name;
   }
-
-  //
-  // The chunk could potentially be an error, capture it before
-  // its pushed to the queue.
-  //
-  if (chunk instanceof Error) return this.capture(chunk);
 
   this.debug('Queueing data chunk');
   return this.bootstrap.queue(name, this._parent, chunk);
@@ -790,24 +700,6 @@ Pagelet.readable('end', function end(chunk) {
   });
 
   return true;
-});
-
-/**
- * We've received an error. Close down pagelet and display a 500
- * error Pagelet instead.
- *
- * @TODO handle the case when we've already flushed the initial bootstrap code
- * to the client and we're presented with an error.
- *
- * @param {Error} error Optional error argument to trigger the error pagelet.
- * @param {Boolean} bootstrap Trigger full bootstrap if true.
- * @returns {Pagelet} Reference to Pagelet.
- * @api private
- */
-Pagelet.readable('capture', function capture(error, bootstrap) {
-  this.debug('Captured an error: %s, displaying error pagelet instead', error);
-
-  return this._bigpipe.status(this, 500, error, bootstrap);
 });
 
 /**
@@ -1155,17 +1047,17 @@ Pagelet.optimize = function optimize(options, done) {
 
   var stack = []
     , Pagelet = this
-    , pipe = options.pipe || {}
+    , bigpipe = options.bigpipe || {}
     , transform = options.transform || {}
-    , temper = options.temper || pipe._temper
+    , temper = options.temper || bigpipe._temper
     , before, after;
 
   //
   // Check if before listener is found. Add before emit to the stack.
   // This async function will be called before optimize.
   //
-  if (pipe._events && 'transform:pagelet:before' in pipe._events) {
-    before = pipe._events['transform:pagelet:before'].length || 1;
+  if (bigpipe._events && 'transform:pagelet:before' in bigpipe._events) {
+    before = bigpipe._events['transform:pagelet:before'].length || 1;
 
     stack.push(function run(next) {
       var n = 0;
@@ -1186,8 +1078,8 @@ Pagelet.optimize = function optimize(options, done) {
   // Check if after listener is found. Add after emit to the stack.
   // This async function will be called after optimize.
   //
-  if (pipe._events && 'transform:pagelet:after' in pipe._events) {
-    after = pipe._events['transform:pagelet:after'].length || 1;
+  if (bigpipe._events && 'transform:pagelet:after' in bigpipe._events) {
+    after = bigpipe._events['transform:pagelet:after'].length || 1;
 
     stack.push(function run(Pagelet, next) {
       var n = 0;
@@ -1276,10 +1168,10 @@ Pagelet.optimize = function optimize(options, done) {
 
       Child.optimize({
         temper: temper,
-        pipe: pipe,
+        bigpipe: bigpipe,
         transform: {
-          before: pipe.emits && pipe.emits('transform:pagelet:before'),
-          after: pipe.emits && pipe.emits('transform:pagelet:after')
+          before: bigpipe.emits && bigpipe.emits('transform:pagelet:before'),
+          after: bigpipe.emits && bigpipe.emits('transform:pagelet:after')
         }
       }, step);
     }, function optimized(error, children) {
