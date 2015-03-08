@@ -30,8 +30,9 @@ var operations = 'POST, PUT, DELETE, PATCH'.toLowerCase().split(', ');
  * @returns {String}
  * @api private
  */
-function generator() {
-  return Math.random().toString(36).substring(2).toUpperCase();
+function generator(n) {
+  if (!n) return Date.now().toString(36).toUpperCase();
+  return Math.random().toString(36).substring(2, 10).toUpperCase();
 }
 
 /**
@@ -1113,7 +1114,7 @@ Pagelet.optimize = function optimize(options, done) {
     //
     // Generate a unique ID used for real time connection lookups.
     //
-    prototype.id = options.id || [1, 1, 1, 1].map(generator).join('-');
+    prototype.id = options.id || [0, 1, 1, 1].map(generator).join('-');
 
     //
     // Parse the methods to an array of accepted HTTP methods. We'll only accept
