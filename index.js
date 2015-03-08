@@ -483,11 +483,11 @@ Pagelet.readable('init', function init() {
       if (method in pagelet) {
         reader.before(pagelet[method], pagelet);
       } else {
-        pagelet._bigpipe[pagelet.mode]();
+        pagelet._bigpipe[pagelet.mode](pagelet);
       }
     });
   } else {
-    this._bigpipe[this.mode]();
+    this._bigpipe[this.mode](this);
   }
 });
 
@@ -863,7 +863,7 @@ Pagelet.readable('render', function render(options, fn) {
 
         content = view(result, { html: true });
       } catch (e) {
-        if ('production' !== process.env.NODE_ENV) {
+        if ('production' !== pagelet.env) {
           pagelet.debug('Captured rendering error: %s', e.stack);
         }
 
@@ -878,7 +878,7 @@ Pagelet.readable('render', function render(options, fn) {
 
         content = temper.fetch(pagelet.error).server(pagelet.merge(result, {
           reason: 'Failed to render: '+ pagelet.name,
-          env: process.env.NODE_ENV || 'development',
+          env: pagelet.env,
           message: e.message,
           stack: e.stack,
           error: e
