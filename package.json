@@ -33,7 +33,6 @@
     "fabricator": "0.4.x",
     "formidable": "1.0.x",
     "fusing": "1.0.x",
-    "json-stringify-safe": "5.0.x",
     "routable": "0.0.x",
     "temper": "0.3.x"
   },
@@ -41,9 +40,9 @@
     "assume": "1.1.x",
     "bigpipe": "bigpipe/bigpipe",
     "istanbul": "0.3.x",
-    "mocha": "2.1.x",
+    "mocha": "2.2.x",
     "pre-commit": "1.0.x",
-    "react": "0.12.x",
-    "react-jsx": "0.12.x"
+    "react": "0.13.x",
+    "react-jsx": "0.13.x"
   }
 }

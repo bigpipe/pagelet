@@ -1,7 +1,6 @@
 'use strict';
 
 var Formidable = require('formidable').IncomingForm
-  , jstringify = require('json-stringify-safe')
   , fabricate = require('fabricator')
   , helpers = require('./helpers')
   , debug = require('diagnostics')
@@ -33,25 +32,6 @@ var operations = 'POST, PUT, DELETE, PATCH'.toLowerCase().split(', ');
 function generator(n) {
   if (!n) return Date.now().toString(36).toUpperCase();
   return Math.random().toString(36).substring(2, 10).toUpperCase();
-}
-
-/**
- * Replacer for JSON so the resulting object can safely be loaded in a script
- * tag without crashing.
- *
- * @param {String} key key that we're replacing.
- * @param {Mixed} data
- * @api private
- */
-function replacer(key, data) {
-  if ('string' !== typeof data) return data;
-
-  return data
-    .replace(/&/gm, '&amp;')
-    .replace(/</gm, '&lt;')
-    .replace(/>/gm, '&gt;')
-    .replace(/"/gm, '&quot;')
-    .replace(/'/gm, '&#x27;');
 }
 
 /**
@@ -552,28 +532,6 @@ Pagelet.readable('read', function read() {
   return form.parse(this._req);
 });
 
-/**
- * A safe and fast(er) alternative to the `json-stringify-save` as uses the
- * replacer to make the transformation save. This is really costly for larger
- * JSON structures. We assume that all the JSON contains no cyclic references.
- *
- * @param {Mixed} data Data that needs to be transformed in to a string.
- * @param {Function} replacer Optional data replacer.
- * @returns {String}
- * @api public
- */
-Pagelet.readable('stringify', function stringify(data, replacer) {
-  var result;
-
-  try { result = JSON.stringify(data, replacer); }
-  catch (e) {
-    this.debug('Failed to normally stringify the data');
-    result = jstringify(data, replacer);
-  }
-
-  return result;
-});
-
 //
 // !IMPORTANT
 //
@@ -818,13 +776,11 @@ Pagelet.readable('render', function render(options, fn) {
       client: temper.fetch(pagelet.view).hash.client
     };
 
-    data = pagelet.stringify(data, replacer);
-
     fn.call(context, undefined, framework.get('fragment', {
       template: content.replace(/<!--(.|\s)*?-->/, ''),
-      state: pagelet.stringify(state, replacer),
-      name: JSON.stringify(pagelet.name),
-      id: JSON.stringify(pagelet.id),
+      name: pagelet.name,
+      id: pagelet.id,
+      state: state,
       data: data
     }));
 
