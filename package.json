@@ -1,6 +1,6 @@
 {
   "name": "pagelet",
-  "version": "1.0.0-alpha-1",
+  "version": "1.0.0-alpha-2",
   "description": "pagelet",
   "main": "index.js",
   "scripts": {
