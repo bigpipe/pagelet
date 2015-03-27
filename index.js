@@ -953,7 +953,9 @@ Pagelet.children = function children(parent, stack) {
     , log = debug('pagelet:'+ parent);
 
   stack = stack || [];
-  if (!pagelets || !Object.keys(pagelets).length) return stack;
+  if (!pagelets || ('object' === typeof pagelets && !Object.keys(pagelets).length)) {
+    return stack;
+  }
 
   return fabricate(pagelets, {
     source: this.prototype.directory,
