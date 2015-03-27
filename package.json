@@ -1,6 +1,6 @@
 {
   "name": "pagelet",
-  "version": "1.0.0-alpha-2",
+  "version": "1.0.0-alpha-3",
   "description": "pagelet",
   "main": "index.js",
   "scripts": {
@@ -30,7 +30,7 @@
     "diagnostics": "0.0.x",
     "dot-component": "0.1.x",
     "eventemitter3": "0.1.x",
-    "fabricator": "0.4.x",
+    "fabricator": "0.5.x",
     "formidable": "1.0.x",
     "fusing": "1.0.x",
     "routable": "0.0.x",
