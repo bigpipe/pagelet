@@ -206,6 +206,88 @@ describe('Pagelet', function () {
     });
   });
 
+  describe('.conditional', function () {
+    it('is a function', function () {
+      assume(pagelet.conditional).to.be.a('function');
+      assume(pagelet.conditional.length).to.equal(3);
+    });
+
+    it('has an optional list argument for alternate pagelets', function (done) {
+      pagelet.conditional({}, function (authorized) {
+        assume(authorized).to.equal(true);
+        done();
+      });
+    });
+
+    it('will use cached boolean value of authenticate', function (done) {
+      pagelet._active = false;
+      pagelet.conditional({}, function (authorized) {
+        assume(authorized).to.equal(false);
+
+        pagelet._active = 'invalid boolean';
+        pagelet.conditional({}, function (authorized) {
+          assume(authorized).to.equal(true);
+          done();
+        });
+      });
+    });
+
+    it('will authorize if no authorization method is provided', function (done) {
+      pagelet.conditional({}, [], function (authorized) {
+        assume(authorized).to.equal(true);
+        assume(pagelet._active).to.equal(true);
+        done();
+      });
+    });
+
+    it('will call authorization method without conditional pagelets', function (done) {
+      var Conditional = P.extend({
+        if: function stubAuth(req, enabled) {
+          assume(enabled).to.be.a('function');
+          enabled(req.test === 'stubbed req');
+        }
+      });
+
+      new Conditional().conditional({ test: 'stubbed req' }, function (auth) {
+        assume(auth).to.equal(true);
+        done();
+      });
+    });
+
+    it('will call authorization method with conditional pagelets', function (done) {
+      var Conditional = P.extend({
+        if: function stubAuth(req, list, enabled) {
+          assume(list).to.be.an('array');
+          assume(list.length).to.equal(1);
+          assume(list[0]).to.be.instanceof(Pagelet);
+          assume(enabled).to.be.a('function');
+          enabled(req.test !== 'stubbed req');
+        }
+      });
+
+      new Conditional().conditional({ test: 'stubbed req' }, [pagelet], function (auth) {
+        assume(auth).to.equal(false);
+        done();
+      });
+    });
+
+    it('will call authorization method with conditional pagelets', function (done) {
+      var Conditional = P.extend({
+        if: function stubAuth(req, list, enabled) {
+          assume(list).to.be.an('array');
+          assume(list.length).to.equal(0);
+          assume(enabled).to.be.a('function');
+          enabled();
+        }
+      });
+
+      new Conditional().conditional({ test: 'stubbed req' }, function (auth) {
+        assume(auth).to.equal(false);
+        done();
+      });
+    });
+  });
+
   describe('.children', function () {
     it('is a function', function () {
       assume(Pagelet.children).to.be.a('function');

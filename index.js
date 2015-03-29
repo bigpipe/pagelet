@@ -861,7 +861,7 @@ Pagelet.readable('render', function render(options, fn) {
  * Authenticate the Pagelet.
  *
  * @param {Request} req The HTTP request.
- * @param {Function} list Array of possible alternate pagelets that take it's place.
+ * @param {Function} list Array of optional alternate pagelets that take it's place.
  * @param {Function} fn The authorized callback.
  * @returns {Pagelet}
  * @api private
@@ -876,21 +876,23 @@ Pagelet.readable('conditional', function conditional(req, list, fn) {
 
   /**
    * Callback for the `pagelet.if` function to see if we're enabled or disabled.
+   * Use cached value in _active to prevent the same Pagelet being authorized
+   * multiple times for the same request.
    *
    * @param {Boolean} value Are we enabled or disabled.
    * @api private
    */
   function enabled(value) {
-    fn.call(pagelet, pagelet.active = value);
+    fn.call(pagelet, pagelet._active = value || false);
   }
 
   if ('boolean' === typeof this._active) {
-    fn(pagelet.active);
+    fn(pagelet._active);
   } else if ('function' !== typeof this.if) {
-    fn(pagelet.active = true);
+    fn(pagelet._active = true);
   } else {
     if (pagelet.if.length === 2) pagelet.if(req, enabled);
-    else pagelet.if(req, list || [], enabled);
+    else pagelet.if(req, list, enabled);
   }
 
   return pagelet;
