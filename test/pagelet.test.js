@@ -1,7 +1,7 @@
 describe('Pagelet', function () {
   'use strict';
 
-  var Pagelet = require('../').extend({ name: 'test' })
+  var Pagelet = require('../')
     , Temper = require('temper')
     , BigPipe = require('bigpipe')
     , assume = require('assume')
@@ -145,7 +145,19 @@ describe('Pagelet', function () {
   });
 
   describe('.length', function () {
-    it('is a getter that returns the childrens length', function () {
+    it('is a getter', function () {
+      var props = Object.getOwnPropertyDescriptor(Pagelet.prototype, 'length');
+
+      assume(Pagelet.prototype).to.have.property('length');
+      assume(props).to.have.property('get');
+      assume(props.get).to.be.a('function');
+
+      assume(props).to.have.property('set', void 0);
+      assume(props).to.have.property('enumerable', false);
+      assume(props).to.have.property('configurable', false);
+    });
+
+    it('returns the childrens length', function () {
       pagelet._children = [ 1, 2, 3 ];
       assume(pagelet.length).to.equal(3);
     });
