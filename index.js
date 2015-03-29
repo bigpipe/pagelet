@@ -684,7 +684,7 @@ Pagelet.set('contentType', function get() {
 Pagelet.set('bootstrap', function get() {
   return !this._bootstrap && this.name === 'bootstrap' ? this : this._bootstrap || {};
 }, function set(value) {
-  return this._bootstrap = value;
+  if (value instanceof Pagelet) return this._bootstrap = value;
 });
 
 /**

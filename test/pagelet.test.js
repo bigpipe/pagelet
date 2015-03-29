@@ -213,6 +213,58 @@ describe('Pagelet', function () {
     });
   });
 
+  describe('.bootstrap', function () {
+    it('is a getter', function () {
+      var props = Object.getOwnPropertyDescriptor(Pagelet.prototype, 'bootstrap');
+
+      assume(Pagelet.prototype).to.have.property('bootstrap');
+      assume(props).to.have.property('get');
+      assume(props.get).to.be.a('function');
+
+      assume(props).to.have.property('enumerable', false);
+      assume(props).to.have.property('configurable', false);
+    });
+
+    it('is a setter', function () {
+      var props = Object.getOwnPropertyDescriptor(Pagelet.prototype, 'bootstrap');
+
+      assume(Pagelet.prototype).to.have.property('bootstrap');
+      assume(props).to.have.property('set');
+      assume(props.get).to.be.a('function');
+
+      assume(props).to.have.property('enumerable', false);
+      assume(props).to.have.property('configurable', false);
+    });
+
+    it('sets a reference to a bootstrap pagelet', function () {
+      var bootstrap = new Pagelet;
+
+      pagelet.bootstrap = bootstrap;
+      assume(pagelet._bootstrap).to.equal(bootstrap);
+    });
+
+    it('only accepts pagelet instances', function () {
+      pagelet.bootstrap = 'will not be set';
+      assume(pagelet._bootstrap).to.equal(void 0);
+    });
+
+    it('returns a reference to the bootstrap pagelet or empty object', function () {
+      assume(Object.keys(pagelet.bootstrap).length).to.equal(0);
+      assume(pagelet.bootstrap.name).to.equal(void 0);
+
+      var bootstrap = new Pagelet({ name: 'bootstrap' });
+
+      pagelet.bootstrap = bootstrap;
+      assume(pagelet.bootstrap).to.equal(bootstrap);
+    });
+
+    it('returns a reference to self if it is a boostrap pagelet', function () {
+      var bootstrap = new (Pagelet.extend({ name: 'bootstrap' }));
+
+      assume(bootstrap.bootstrap).to.equal(bootstrap);
+    });
+  });
+
   describe('.active', function () {
     it('is a getter', function () {
       var props = Object.getOwnPropertyDescriptor(Pagelet.prototype, 'active');
