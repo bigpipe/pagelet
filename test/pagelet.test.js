@@ -19,6 +19,7 @@ describe('Pagelet', function () {
   beforeEach(function () {
     P = Pagelet.extend({
       directory: __dirname,
+      error: 'fixtures/error.html',
       view: 'fixtures/view.html',
       css: 'fixtures/style.css',
       js: '//cdnjs.cloudflare.com/ajax/libs/d3/3.4.8/d3.min.js',
@@ -65,7 +66,12 @@ describe('Pagelet', function () {
   });
 
   describe('.on', function () {
-    it('sets the pathname', function () {
+    it('is a function', function () {
+      assume(Pagelet.on).is.a('function');
+      assume(Pagelet.on.length).to.equal(1);
+    });
+
+    it('sets the directory property to dirname', function () {
       var pagelet = Pagelet.extend({});
       assume(pagelet.prototype.directory).to.equal('');
 
@@ -85,7 +91,12 @@ describe('Pagelet', function () {
       assume(P.prototype.view).to.equal(__dirname +'/fixtures/view.html');
     });
 
-    it('resolves the `error` view');
+    it('resolves the `error` view', function () {
+      assume(P.prototype.error).to.equal('fixtures/error.html');
+
+      P.on(module);
+      assume(P.prototype.error).to.equal(__dirname +'/fixtures/error.html');
+    });
   });
 
   describe('.discover', function () {
