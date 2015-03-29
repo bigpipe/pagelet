@@ -204,6 +204,13 @@ describe('Pagelet', function () {
       assume(result).to.be.a('string');
       assume(result).to.equal('<h1>Some data fixture</h1>');
     });
+
+    it('provides empty object as fallback for data', function() {
+      var result = new (P.extend().on(module))({ temper: temper }).template();
+
+      assume(result).to.be.a('string');
+      assume(result).to.equal('<h1>Some {test} fixture</h1>');
+    });
   });
 
   describe('.conditional', function () {
@@ -271,7 +278,7 @@ describe('Pagelet', function () {
       });
     });
 
-    it('will call authorization method with conditional pagelets', function (done) {
+    it('will default to not authorized if no value is provided to the callback', function (done) {
       var Conditional = P.extend({
         if: function stubAuth(req, list, enabled) {
           assume(list).to.be.an('array');
