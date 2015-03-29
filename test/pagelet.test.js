@@ -213,6 +213,59 @@ describe('Pagelet', function () {
     });
   });
 
+  describe('.active', function () {
+    it('is a getter', function () {
+      var props = Object.getOwnPropertyDescriptor(Pagelet.prototype, 'active');
+
+      assume(Pagelet.prototype).to.have.property('active');
+      assume(props).to.have.property('get');
+      assume(props.get).to.be.a('function');
+
+      assume(props).to.have.property('enumerable', false);
+      assume(props).to.have.property('configurable', false);
+    });
+
+    it('is a setter', function () {
+      var props = Object.getOwnPropertyDescriptor(Pagelet.prototype, 'active');
+
+      assume(Pagelet.prototype).to.have.property('active');
+      assume(props).to.have.property('set');
+      assume(props.get).to.be.a('function');
+
+      assume(props).to.have.property('enumerable', false);
+      assume(props).to.have.property('configurable', false);
+    });
+
+    it('sets the provided value to _active as boolean', function () {
+      pagelet.active = 'true';
+      assume(pagelet._active).to.equal(true);
+
+      pagelet.active = false;
+      assume(pagelet._active).to.equal(false);
+    });
+
+    it('returns true if no conditional method is available', function () {
+      assume(pagelet.active).to.equal(true);
+
+      pagelet._active = false;
+      assume(pagelet.active).to.equal(true);
+    });
+
+    it('returns the boolean value of _active if a conditional method is available', function () {
+      var Conditional = P.extend({ if: noop })
+        , conditional = new Conditional;
+
+      conditional._active = true;
+      assume(conditional.active).to.equal(true);
+
+      conditional._active = null;
+      assume(conditional.active).to.equal(false);
+
+      conditional._active = false;
+      assume(conditional.active).to.equal(false);
+    });
+  });
+
   describe('.conditional', function () {
     it('is a function', function () {
       assume(pagelet.conditional).to.be.a('function');
@@ -227,13 +280,22 @@ describe('Pagelet', function () {
     });
 
     it('will use cached boolean value of authenticate', function (done) {
-      pagelet._active = false;
-      pagelet.conditional({}, function (authorized) {
+      var Conditional = P.extend({
+        if: function stubAuth(req, enabled) {
+          assume(enabled).to.be.a('function');
+          enabled(req.test === 'stubbed req');
+        }
+      }), conditional;
+
+      var conditional = new Conditional;
+      conditional._active = false;
+
+      conditional.conditional({}, function (authorized) {
         assume(authorized).to.equal(false);
 
-        pagelet._active = 'invalid boolean';
-        pagelet.conditional({}, function (authorized) {
-          assume(authorized).to.equal(true);
+        conditional._active = 'invalid boolean';
+        conditional.conditional({}, function (authorized) {
+          assume(authorized).to.equal(false);
           done();
         });
       });

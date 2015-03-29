@@ -696,7 +696,7 @@ Pagelet.set('bootstrap', function get() {
  */
 Pagelet.set('active', function get() {
   return 'function' !== typeof this.if              // No conditional check needed.
-  || this._active && this._active !== null;         // Conditional check has been done.
+  || this._active !== null && this._active;         // Conditional check has been done.
 }, function set(value) {
   return this._active = !!value;
 });
@@ -883,13 +883,13 @@ Pagelet.readable('conditional', function conditional(req, list, fn) {
    * @api private
    */
   function enabled(value) {
-    fn.call(pagelet, pagelet._active = value || false);
+    fn.call(pagelet, pagelet.active = value || false);
   }
 
-  if ('boolean' === typeof this._active) {
-    fn(pagelet._active);
+  if ('boolean' === typeof pagelet._active) {
+    fn(pagelet.active);
   } else if ('function' !== typeof this.if) {
-    fn(pagelet._active = true);
+    fn(pagelet.active = true);
   } else {
     if (pagelet.if.length === 2) pagelet.if(req, enabled);
     else pagelet.if(req, list, enabled);
