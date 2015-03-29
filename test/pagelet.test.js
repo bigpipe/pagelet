@@ -3,7 +3,7 @@ describe('Pagelet', function () {
 
   var Pagelet = require('../').extend({ name: 'test' })
     , Temper = require('temper')
-    , Pipe = require('bigpipe')
+    , BigPipe = require('bigpipe')
     , assume = require('assume')
     , React = require('react')
     , server = require('http').createServer()
@@ -14,7 +14,12 @@ describe('Pagelet', function () {
   // because our pagelet is not exported using `.on(module)`
   //
   var temper = new Temper
-    , bigpipe = new Pipe(server);
+    , bigpipe = new BigPipe(server);
+
+  //
+  // Stub for no operation callbacks.
+  //
+  function noop() {}
 
   beforeEach(function () {
     P = Pagelet.extend({
@@ -59,7 +64,7 @@ describe('Pagelet', function () {
     var property = Object.getOwnPropertyDescriptor(pagelet, '_bigpipe');
 
     assume(pagelet._bigpipe).to.be.an('object');
-    assume(pagelet._bigpipe).to.be.instanceof(Pipe);
+    assume(pagelet._bigpipe).to.be.instanceof(BigPipe);
     assume(property.writable).to.equal(true);
     assume(property.enumerable).to.equal(false);
     assume(property.configurable).to.equal(true);
@@ -96,6 +101,24 @@ describe('Pagelet', function () {
 
       P.on(module);
       assume(P.prototype.error).to.equal(__dirname +'/fixtures/error.html');
+    });
+  });
+
+  describe('.destroy', function () {
+    it('is a function', function () {
+      assume(pagelet.destroy).to.be.a('function');
+      assume(pagelet.destroy.length).to.equal(0);
+    });
+
+    it('cleans object references from the Pagelet instance', function () {
+      var local = new Pagelet({ temper: temper, bigpipe: bigpipe });
+      local.on('test', noop)
+
+      local.destroy();
+      assume(local).to.have.property('_temper', null);
+      assume(local).to.have.property('_bigpipe', null);
+      assume(local).to.have.property('_children', null);
+      assume(local).to.have.property('_events', null);
     });
   });
 

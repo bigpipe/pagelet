@@ -903,7 +903,7 @@ Pagelet.readable('conditional', function conditional(req, list, fn) {
  * @api public
  */
 Pagelet.readable('destroy', destroy([
-  '_temper', '_bigpipe', '_enabled', '_disabled', '_pagelets'
+  '_temper', '_bigpipe', '_enabled', '_disabled', '_children'
 ], {
   after: 'removeAllListeners'
 }));
