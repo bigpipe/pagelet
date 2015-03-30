@@ -318,9 +318,17 @@ Pagelet.writable('_children', {});
 Pagelet.writable('_dependencies', {});
 
 /**
+ * Default character set, UTF-8.
+ *
+ * @type {String}
+ * @private
+ */
+Pagelet.writable('_charset', 'UTF-8');
+
+/**
  * Default content type of the Pagelet.
  *
- * @type {Object}
+ * @type {String}
  * @private
  */
 Pagelet.writable('_contentType', 'text/html');
@@ -669,7 +677,7 @@ Pagelet.readable('end', function end(chunk) {
  * @public
  */
 Pagelet.set('contentType', function get() {
-  return this._contentType +';charset='+ this.charset;
+  return this._contentType +';charset='+ this._charset;
 }, function set(value) {
   return this._contentType = value;
 });

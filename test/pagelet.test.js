@@ -213,6 +213,45 @@ describe('Pagelet', function () {
     });
   });
 
+  describe('.contentType', function () {
+    it('is a getter', function () {
+      var props = Object.getOwnPropertyDescriptor(Pagelet.prototype, 'contentType');
+
+      assume(Pagelet.prototype).to.have.property('contentType');
+      assume(props).to.have.property('get');
+      assume(props.get).to.be.a('function');
+
+      assume(props).to.have.property('enumerable', false);
+      assume(props).to.have.property('configurable', false);
+    });
+
+    it('is a setter', function () {
+      var props = Object.getOwnPropertyDescriptor(Pagelet.prototype, 'contentType');
+
+      assume(Pagelet.prototype).to.have.property('contentType');
+      assume(props).to.have.property('set');
+      assume(props.get).to.be.a('function');
+
+      assume(props).to.have.property('enumerable', false);
+      assume(props).to.have.property('configurable', false);
+    });
+
+    it('sets the Content-Type', function () {
+      pagelet.contentType = 'application/test';
+      assume(pagelet._contentType).to.equal('application/test');
+    });
+
+    it('returns the Content-Type of the pagelet appended with the charset', function () {
+      assume(pagelet.contentType).to.equal('text/html;charset=UTF-8');
+
+      pagelet._contentType = 'application/test';
+      assume(pagelet.contentType).to.equal('application/test;charset=UTF-8');
+
+      pagelet._charset = 'UTF-7';
+      assume(pagelet.contentType).to.equal('application/test;charset=UTF-7');
+    });
+  });
+
   describe('.bootstrap', function () {
     it('is a getter', function () {
       var props = Object.getOwnPropertyDescriptor(Pagelet.prototype, 'bootstrap');
