@@ -670,11 +670,24 @@ Pagelet.readable('end', function end(chunk) {
 });
 
 /**
+ * Set or get the value of the character set, only allows strings.
+ *
+ * @type {String}
+ * @api public
+ */
+Pagelet.set('charset', function get() {
+  return this._charset;
+}, function set(value) {
+  if ('string' !== typeof value) return;
+  return this._charset = value;
+});
+
+/**
  * The Content-Type of the response. This defaults to text/html with a charset
  * preset inherited from the charset property.
  *
  * @type {String}
- * @public
+ * @api public
  */
 Pagelet.set('contentType', function get() {
   return this._contentType +';charset='+ this._charset;
