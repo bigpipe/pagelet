@@ -1084,8 +1084,10 @@ Pagelet.optimize = function optimize(options, done) {
   function optimizer(Pagelet, next) {
     var prototype = Pagelet.prototype
       , method = prototype.method
+      , status = prototype.status
       , router = prototype.path
       , name = prototype.name
+      , view = prototype.view
       , log = debug('pagelet:'+ name);
 
     //
@@ -1113,18 +1115,20 @@ Pagelet.optimize = function optimize(options, done) {
 
     //
     // Prefetch the template if a view is available. The view property is
-    // mandatory but it's quite silly to enforce this if the pagelet is
-    // just doing a redirect. We can check for this edge case by
-    // checking if the set statusCode is in the 300~ range.
+    // mandatory for all pagelets except the bootstrap Pagelet or if the
+    // Pagelet is just doing a redirect. We can resolve this edge case by
+    // checking if statusCode is in the 300~ range.
     //
-    if (prototype.view) {
-      prototype.view = path.resolve(prototype.directory, prototype.view);
-      temper.prefetch(prototype.view, prototype.engine);
-    } else if (!(prototype.statusCode >= 300 && prototype.statusCode < 400)) {
-      return next(new Error(
-        'The '+ name +' pagelet for path '+ router +' should have a .view property.'
-      ));
-    }
+    if (!view && name !== 'bootstrap' && !(status >= 300 && status < 400)) return next(
+      new Error('The '+ name +' pagelet should have a .view property.')
+    );
+
+    //
+    // Resolve the view to ensure the path is correct and prefetch
+    // the template through Temper.
+    //
+    prototype.view = view = path.resolve(prototype.directory, view);
+    temper.prefetch(view, prototype.engine);
 
     //
     // Ensure we have a custom error pagelet when we fail to render this fragment.
