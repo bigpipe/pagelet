@@ -1127,8 +1127,10 @@ Pagelet.optimize = function optimize(options, done) {
     // Resolve the view to ensure the path is correct and prefetch
     // the template through Temper.
     //
-    prototype.view = view = path.resolve(prototype.directory, view);
-    temper.prefetch(view, prototype.engine);
+    if (view) {
+      prototype.view = view = path.resolve(prototype.directory, view);
+      temper.prefetch(view, prototype.engine);
+    }
 
     //
     // Ensure we have a custom error pagelet when we fail to render this fragment.
