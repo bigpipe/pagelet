@@ -276,22 +276,25 @@ describe('Pagelet', function () {
     });
 
     it('sets a reference to a bootstrap pagelet', function () {
-      var bootstrap = new Pagelet;
+      var bootstrap = new (Pagelet.extend({ name: 'bootstrap' }));
 
       pagelet.bootstrap = bootstrap;
       assume(pagelet._bootstrap).to.equal(bootstrap);
     });
 
-    it('only accepts pagelet instances', function () {
+    it('only accepts objects that look like bootstrap pagelets', function () {
       pagelet.bootstrap = 'will not be set';
       assume(pagelet._bootstrap).to.equal(void 0);
+
+      pagelet.bootstrap = { name: 'bootstrap', test: 'will be set' };
+      assume(pagelet._bootstrap).to.have.property('test', 'will be set');
     });
 
     it('returns a reference to the bootstrap pagelet or empty object', function () {
       assume(Object.keys(pagelet.bootstrap).length).to.equal(0);
       assume(pagelet.bootstrap.name).to.equal(void 0);
 
-      var bootstrap = new Pagelet({ name: 'bootstrap' });
+      var bootstrap = new (Pagelet.extend({ name: 'bootstrap' }));
 
       pagelet.bootstrap = bootstrap;
       assume(pagelet.bootstrap).to.equal(bootstrap);
