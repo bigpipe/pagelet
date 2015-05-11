@@ -1,12 +1,15 @@
 describe('Pagelet', function () {
   'use strict';
 
-  var Pagelet = require('../')
-    , Temper = require('temper')
+  var server = require('http').createServer()
     , BigPipe = require('bigpipe')
+    , common = require('./common')
+    , Temper = require('temper')
     , assume = require('assume')
+    , Response = common.Response
+    , Request = common.Request
+    , Pagelet = require('../')
     , React = require('react')
-    , server = require('http').createServer()
     , pagelet, P;
 
   //
@@ -449,6 +452,38 @@ describe('Pagelet', function () {
         done();
       });
     });
+  });
+
+  describe('#redirect', function () {
+    it('is a function', function () {
+      assume(pagelet.redirect).to.be.a('function');
+      assume(pagelet.redirect.length).to.equal(3);
+    });
+
+    it('proxies calls to the bigpipe instance', function (done) {
+      var CustomPipe = BigPipe.extend({
+        redirect: function redirect(ref, path, code, options) {
+          assume(ref).to.be.instanceof(Pagelet);
+          assume(ref).to.equal(pagelet);
+          assume(path).to.equal('/test');
+          assume(code).to.equal(404);
+          assume(options).to.have.property('cache', false);
+
+          done();
+        }
+      });
+
+      pagelet = new P({ bigpipe: new CustomPipe(server) });
+      pagelet.redirect('/test', 404, {
+        cache: false
+      });
+    });
+
+    it('returns a reference to the pagelet', function () {
+      pagelet = new P({ bigpipe: bigpipe });
+      pagelet._res = new Response;
+      assume(pagelet.redirect('/')).to.equal(pagelet);
+    })
   });
 
   describe('#children', function () {
