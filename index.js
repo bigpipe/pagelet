@@ -723,6 +723,20 @@ Pagelet.set('active', function get() {
 });
 
 /**
+ * Helper method that proxies to the redirect of the BigPipe instance.
+ *
+ * @param {String} path Redirect URI.
+ * @param {Number} status Optional status code.
+ * @param {Object} options Optional options, e.g. caching headers.
+ * @returns {Pagelet} fluent interface.
+ * @api public
+ */
+Pagelet.readable('redirect', function redirect(path, status, options) {
+  this._bigpipe.redirect(this, path, status, options);
+  return this;
+});
+
+/**
  * Proxy to return the compiled server template from Temper.
  *
  * @param {String} view Absolute path to the templates location.
