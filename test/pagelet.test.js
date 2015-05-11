@@ -70,7 +70,7 @@ describe('Pagelet', function () {
     assume(property.configurable).to.equal(true);
   });
 
-  describe('.on', function () {
+  describe('#on', function () {
     it('is a function', function () {
       assume(Pagelet.on).is.a('function');
       assume(Pagelet.on.length).to.equal(1);
@@ -104,7 +104,7 @@ describe('Pagelet', function () {
     });
   });
 
-  describe('.destroy', function () {
+  describe('#destroy', function () {
     it('is a function', function () {
       assume(pagelet.destroy).to.be.a('function');
       assume(pagelet.destroy.length).to.equal(0);
@@ -112,7 +112,7 @@ describe('Pagelet', function () {
 
     it('cleans object references from the Pagelet instance', function () {
       var local = new Pagelet({ temper: temper, bigpipe: bigpipe });
-      local.on('test', noop)
+      local.on('test', noop);
 
       local.destroy();
       assume(local).to.have.property('_temper', null);
@@ -122,7 +122,7 @@ describe('Pagelet', function () {
     });
   });
 
-  describe('.discover', function () {
+  describe('#discover', function () {
     it('emits discover and returns immediatly if the parent pagelet has no children', function (done) {
       pagelet.once('discover', done);
       pagelet.discover();
@@ -144,7 +144,7 @@ describe('Pagelet', function () {
     });*/
   });
 
-  describe('.length', function () {
+  describe('#length', function () {
     it('is a getter', function () {
       var props = Object.getOwnPropertyDescriptor(Pagelet.prototype, 'length');
 
@@ -163,7 +163,7 @@ describe('Pagelet', function () {
     });
   });
 
-  describe('.template', function () {
+  describe('#template', function () {
     it('is a function', function () {
       assume(Pagelet.prototype.template).to.be.a('function');
       assume(P.prototype.template).to.be.a('function');
@@ -186,7 +186,7 @@ describe('Pagelet', function () {
           render: function () {
             return (
               React.createElement('span', null, 'some text')
-            )
+            );
           }
         }),
         test: 'data'
@@ -213,7 +213,7 @@ describe('Pagelet', function () {
     });
   });
 
-  describe('.contentType', function () {
+  describe('#contentType', function () {
     it('is a getter', function () {
       var props = Object.getOwnPropertyDescriptor(Pagelet.prototype, 'contentType');
 
@@ -252,7 +252,7 @@ describe('Pagelet', function () {
     });
   });
 
-  describe('.bootstrap', function () {
+  describe('#bootstrap', function () {
     it('is a getter', function () {
       var props = Object.getOwnPropertyDescriptor(Pagelet.prototype, 'bootstrap');
 
@@ -307,7 +307,7 @@ describe('Pagelet', function () {
     });
   });
 
-  describe('.active', function () {
+  describe('#active', function () {
     it('is a getter', function () {
       var props = Object.getOwnPropertyDescriptor(Pagelet.prototype, 'active');
 
@@ -360,7 +360,7 @@ describe('Pagelet', function () {
     });
   });
 
-  describe('.conditional', function () {
+  describe('#conditional', function () {
     it('is a function', function () {
       assume(pagelet.conditional).to.be.a('function');
       assume(pagelet.conditional.length).to.equal(3);
@@ -381,7 +381,7 @@ describe('Pagelet', function () {
         }
       }), conditional;
 
-      var conditional = new Conditional;
+      conditional = new Conditional;
       conditional._active = false;
 
       conditional.conditional({}, function (authorized) {
@@ -451,7 +451,7 @@ describe('Pagelet', function () {
     });
   });
 
-  describe('.children', function () {
+  describe('#children', function () {
     it('is a function', function () {
       assume(Pagelet.children).to.be.a('function');
       assume(P.children).to.be.a('function');
@@ -511,7 +511,7 @@ describe('Pagelet', function () {
     });
   });
 
-  describe('.optimize', function () {
+  describe('#optimize', function () {
     it('should prepare an async call stack');
     it('should provide optimizer with Pagelet reference if no transform:before event');
   });
